@@ -14,10 +14,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import time
 from collections import deque
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -26,7 +28,7 @@ import yaml
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 # Local modules (copied from trader-bot-basic)
 from hl_trader import HLTrader
@@ -96,6 +98,80 @@ purchased_signals: List[Dict] = []
 available_signals: List[Dict] = []
 agdel_stats: Dict[str, Any] = {"autoBuy": False, "purchasedCount": 0, "budget": {}}
 
+# ─── Candle aggregation ────────────────────────────────────────
+TIMEFRAMES = {
+    "1m": 60,
+    "3m": 180,
+    "5m": 300,
+    "15m": 900,
+    "1h": 3600,
+}
+MAX_CANDLES = 500  # per timeframe
+
+
+@dataclass
+class Candle:
+    timestamp: float  # open time (unix seconds, aligned to boundary)
+    open: float
+    high: float
+    low: float
+    close: float
+    ticks: int = 0
+
+    def update(self, price: float):
+        self.high = max(self.high, price)
+        self.low = min(self.low, price)
+        self.close = price
+        self.ticks += 1
+
+    def to_dict(self) -> dict:
+        return {"t": self.timestamp, "o": self.open, "h": self.high, "l": self.low, "c": self.close}
+
+
+class CandleStore:
+    """Maintains OHLC candles for a single timeframe."""
+
+    def __init__(self, interval_secs: int):
+        self.interval = interval_secs
+        self.closed: deque[Candle] = deque(maxlen=MAX_CANDLES)
+        self.current: Optional[Candle] = None
+
+    def _boundary(self, ts: float) -> float:
+        """Align timestamp to candle open boundary."""
+        return math.floor(ts / self.interval) * self.interval
+
+    def update(self, price: float, ts: float | None = None) -> Optional[Candle]:
+        """Feed a price tick. Returns a newly closed candle if boundary crossed, else None."""
+        ts = ts or time.time()
+        boundary = self._boundary(ts)
+
+        if self.current is None:
+            self.current = Candle(timestamp=boundary, open=price, high=price, low=price, close=price, ticks=1)
+            return None
+
+        if boundary > self.current.timestamp:
+            # Boundary crossed — close current, start new
+            closed = self.current
+            self.closed.append(closed)
+            self.current = Candle(timestamp=boundary, open=price, high=price, low=price, close=price, ticks=1)
+            return closed
+
+        # Same candle — update OHLC
+        self.current.update(price)
+        return None
+
+    def snapshot(self, limit: int = 200) -> List[dict]:
+        """Return closed candles + current as dicts."""
+        candles = list(self.closed)[-limit:]
+        if self.current:
+            candles.append(self.current)
+        return [c.to_dict() for c in candles]
+
+
+# One store per timeframe
+candle_stores: Dict[str, CandleStore] = {tf: CandleStore(secs) for tf, secs in TIMEFRAMES.items()}
+_last_ws_broadcast: float = 0
+
 
 # ─── Config ──────────────────────────────────────────────────────
 def load_config():
@@ -108,6 +184,47 @@ def load_config():
     except Exception as e:
         logger.error("Failed to load config: %s", e)
         config = {}
+
+
+# ─── Real-time price handler ─────────────────────────────────────
+async def _on_price_tick(price: float):
+    """Called on every WS price update from Hyperliquid (~12/sec)."""
+    global _last_ws_broadcast
+
+    ts = time.time()
+
+    # Update all candle stores
+    closed_candles = {}
+    for tf, store in candle_stores.items():
+        closed = store.update(price, ts)
+        if closed:
+            closed_candles[tf] = closed.to_dict()
+
+    # Throttle WS broadcasts to dashboard (max ~4/sec to avoid flooding)
+    if ts - _last_ws_broadcast < 0.25:
+        return
+    _last_ws_broadcast = ts
+
+    # Build lightweight price message
+    msg = {
+        "type": "priceUpdate",
+        "price": price,
+        "timestamp": ts,
+    }
+    # Include any newly closed candles
+    if closed_candles:
+        msg["closedCandles"] = closed_candles
+    # Include current candle for the active timeframe (dashboard picks its own)
+    msg["currentCandles"] = {}
+    for tf, store in candle_stores.items():
+        if store.current:
+            msg["currentCandles"][tf] = store.current.to_dict()
+
+    for ws in ws_clients[:]:
+        try:
+            await ws.send_json(msg)
+        except Exception:
+            pass
 
 
 # ─── Lifespan ────────────────────────────────────────────────────
@@ -126,7 +243,7 @@ async def lifespan(app: FastAPI):
     load_config()
 
     # Load trade history
-    trade_history = load_jsonl(str(TRADE_HISTORY_PATH), maxlen=200)
+    trade_history = list(load_jsonl(TRADE_HISTORY_PATH, maxlen=200))
     logger.info("  Loaded %d historical trades", len(trade_history))
 
     # Initialize trading components
@@ -157,6 +274,13 @@ async def lifespan(app: FastAPI):
         logger.info("  Connected to Hyperliquid")
     except Exception as e:
         logger.warning("  HL connection failed (paper mode ok): %s", e)
+
+    # Start real-time price feed via WebSocket
+    try:
+        await hl_trader.start_price_feed(callback=_on_price_tick)
+        logger.info("  Real-time price feed started (WS allMids)")
+    except Exception as e:
+        logger.warning("  Price feed start failed: %s", e)
 
     # Start background loops
     tasks = []
@@ -344,8 +468,8 @@ def _record_trade(result, rationale: str, mark_price: float, regime: str = "", c
     if len(trade_history) > 200:
         trade_history.pop(0)
 
-    append_jsonl(str(TRADE_HISTORY_PATH), trade)
-    append_jsonl(str(TRADE_LOG_PATH), {**trade, "markPrice": mark_price})
+    append_jsonl(TRADE_HISTORY_PATH, trade)
+    append_jsonl(TRADE_LOG_PATH, {**trade, "markPrice": mark_price})
     logger.info("TRADE: %s | %s | regime=%s | citations=%d",
                 trade.get("action"), rationale[:60], regime, len(citations or []))
 
@@ -370,7 +494,7 @@ async def reflection_loop():
             latest_reflection = output.to_dict()
 
             if output.success:
-                append_jsonl(str(REFLECTION_LOG_PATH), output.to_dict())
+                append_jsonl(REFLECTION_LOG_PATH, output.to_dict())
                 # Reload CxU store if changes were made
                 if output.data.get("cxusCreated", 0) > 0 or output.data.get("cxusUpdated", 0) > 0:
                     cxu_store.reload()
@@ -501,6 +625,115 @@ def _compute_performance() -> Dict[str, Any]:
 
 
 # ─── REST API ────────────────────────────────────────────────────
+@app.get("/")
+async def serve_dashboard():
+    """Serve dashboard directly from trading server."""
+    dashboard = BASE_DIR / "dashboard.html"
+    if dashboard.exists():
+        return FileResponse(str(dashboard), media_type="text/html")
+    return RedirectResponse("http://localhost:9002/")
+
+
+# Serve shared assets so dashboard works from :9004 too
+from fastapi.staticfiles import StaticFiles
+_shared = BASE_DIR / "shared"
+_pyrana = BASE_DIR / "pyrana_objects"
+_data = BASE_DIR / "data"
+if (_shared / "components").exists():
+    app.mount("/components", StaticFiles(directory=str(_shared / "components")), name="components")
+if (_shared / "design-guide").exists():
+    app.mount("/design-guide", StaticFiles(directory=str(_shared / "design-guide")), name="design-guide")
+if _pyrana.exists():
+    app.mount("/pyrana-objects", StaticFiles(directory=str(_pyrana)), name="pyrana-objects")
+if _data.exists():
+    app.mount("/data", StaticFiles(directory=str(_data)), name="data")
+
+
+# ─── Local Pyrana Object API (for PyranaLibrary component) ───────
+# These endpoints mirror what Pyrana services provide, but read from local files.
+# PyranaLibrary uses empty-string API bases → relative paths to these endpoints.
+
+def _load_json_objects(subdir: str) -> list:
+    """Load all JSON files from a pyrana_objects subdirectory."""
+    d = BASE_DIR / "pyrana_objects" / subdir
+    if not d.exists():
+        return []
+    items = []
+    for f in sorted(d.glob("*.json")):
+        try:
+            with open(f) as fp:
+                items.append(json.load(fp))
+        except Exception:
+            pass
+    return items
+
+
+def _find_json_object(subdir: str, obj_id: str, id_field: str):
+    """Find a single object by its ID field."""
+    for item in _load_json_objects(subdir):
+        if item.get(id_field) == obj_id or item.get("alias") == obj_id:
+            return item
+    return None
+
+
+@app.get("/cxus")
+async def list_cxus_local():
+    return _load_json_objects("cxus")
+
+
+@app.get("/cxus/{cxu_id}")
+async def get_cxu_local(cxu_id: str):
+    cxu = _find_json_object("cxus", cxu_id, "cxu_id")
+    if not cxu:
+        return JSONResponse({"error": f"CxU {cxu_id} not found"}, status_code=404)
+    return cxu
+
+
+# Library component expects /api/prompts, /api/scripts, /api/agents
+@app.get("/api/prompts")
+async def list_prompts_local():
+    return _load_json_objects("prompts")
+
+
+@app.get("/api/prompts/{prompt_id}")
+async def get_prompt_local(prompt_id: str):
+    p = _find_json_object("prompts", prompt_id, "prompt_id")
+    if not p:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return p
+
+
+@app.get("/api/scripts")
+async def list_scripts_local():
+    return _load_json_objects("scripts")
+
+
+@app.get("/api/scripts/{script_id}")
+async def get_script_local(script_id: str):
+    s = _find_json_object("scripts", script_id, "script_id")
+    if not s:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return s
+
+
+@app.get("/api/agents")
+async def list_agents_local():
+    return _load_json_objects("agents")
+
+
+@app.get("/api/skills")
+async def list_skills_local():
+    return _load_json_objects("skills")
+
+
+@app.get("/api/skills/{skill_id}")
+async def get_skill_local(skill_id: str):
+    s = _find_json_object("skills", skill_id, "skill_id")
+    if not s:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return s
+
+
 @app.get("/health")
 async def health():
     return {
@@ -606,7 +839,7 @@ async def trigger_reflection():
 
 @app.get("/api/reflection/history")
 async def get_reflection_history():
-    history = load_jsonl(str(REFLECTION_LOG_PATH), maxlen=50)
+    history = load_jsonl(REFLECTION_LOG_PATH, maxlen=50)
     return {"history": history}
 
 
@@ -628,6 +861,15 @@ async def get_cxus():
 @app.get("/api/ticks")
 async def get_ticks():
     return {"ticks": list(tick_history)}
+
+
+@app.get("/api/candles")
+async def get_candles(timeframe: str = "1m", limit: int = 200):
+    """Return OHLC candles for the given timeframe."""
+    store = candle_stores.get(timeframe)
+    if not store:
+        return JSONResponse({"error": f"Invalid timeframe. Use: {list(TIMEFRAMES.keys())}"}, status_code=400)
+    return {"timeframe": timeframe, "candles": store.snapshot(limit)}
 
 
 @app.get("/api/predictions")

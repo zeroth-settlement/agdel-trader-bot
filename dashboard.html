@@ -27,6 +27,48 @@
   <script src="/components/pyrana-library/index.js"></script>
 
   <style>
+    /* ============================================================
+       Bridge variables: shared components use these names,
+       mapped to Pyrana Design Guide tokens
+       ============================================================ */
+    :root, :root:not(.dark) {
+      --bg-primary: hsl(var(--py-bg));
+      --bg-secondary: hsl(var(--py-card));
+      --bg-tertiary: hsl(var(--py-muted));
+      --bg-card: hsl(var(--py-card));
+      --bg-hover: hsl(var(--py-accent));
+      --text-primary: hsl(var(--py-fg));
+      --text-secondary: hsl(var(--py-card-fg));
+      --text-muted: hsl(var(--py-fg-muted));
+      --border: hsl(var(--py-border));
+      --border-light: hsl(var(--py-border));
+      --border-subtle: hsl(var(--py-border));
+      --accent: hsl(var(--py-primary));
+      --accent-dim: hsl(var(--py-accent));
+      --accent-soft: hsl(var(--py-accent));
+      --success: hsl(var(--py-success));
+      --success-dim: hsl(var(--py-success-light));
+      --success-soft: hsl(var(--py-success-light));
+      --warning: hsl(var(--py-warning));
+      --warning-dim: hsl(var(--py-warning-light));
+      --warning-soft: hsl(var(--py-warning-light));
+      --error: hsl(var(--py-error));
+      --error-dim: hsl(var(--py-error-light));
+      --error-soft: hsl(var(--py-error-light));
+      --info: hsl(var(--py-info));
+      --info-soft: hsl(var(--py-info-light));
+      --color-cxu: var(--py-cxu-text);
+      --color-cxu-dim: var(--py-cxu-bg);
+      --color-script: var(--py-script-text);
+      --color-script-dim: var(--py-script-bg);
+      --color-prompt: var(--py-prompt-text);
+      --color-prompt-dim: var(--py-prompt-bg);
+      --color-skill: var(--py-skill-text);
+      --color-skill-dim: var(--py-skill-bg);
+      --color-agent: var(--py-agent-text);
+      --color-agent-dim: var(--py-agent-bg);
+    }
+
     /* Layout-specific styles only — theme comes from design guide */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: var(--py-font-sans); background: hsl(var(--py-bg)); color: hsl(var(--py-fg)); min-height: 100vh; }
@@ -92,13 +134,32 @@
     }
     @media (max-width: 900px) { .position-card { grid-template-columns: 1fr; } }
 
-    /* Gravity chart */
-    .gravity-container {
+    /* Price chart */
+    .chart-container {
       background: hsl(var(--py-card)); border: 1px solid hsl(var(--py-border));
       border-radius: var(--py-radius); padding: var(--py-space-3);
       margin-bottom: var(--py-space-4); position: relative;
     }
-    .gravity-canvas { width: 100%; height: 320px; }
+    .chart-canvas { width: 100%; height: 400px; }
+    .chart-toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: var(--py-space-2);
+    }
+    .tf-selector { display: flex; gap: 0; }
+    .tf-btn {
+      padding: 3px 10px; border: 1px solid hsl(var(--py-border));
+      background: none; color: hsl(var(--py-fg-muted)); cursor: pointer;
+      font-size: 0.75rem; font-weight: 600; font-family: var(--py-font-mono);
+    }
+    .tf-btn:first-child { border-radius: var(--py-radius-sm) 0 0 var(--py-radius-sm); }
+    .tf-btn:last-child { border-radius: 0 var(--py-radius-sm) var(--py-radius-sm) 0; }
+    .tf-btn.active { background: hsl(var(--py-primary)); color: #fff; border-color: hsl(var(--py-primary)); }
+    .ws-price-indicator {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.7rem; color: hsl(var(--py-fg-muted));
+    }
+    .ws-price-indicator .dot { width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--py-success)); }
+    .ws-price-indicator .dot.off { background: hsl(var(--py-fg-muted)); }
 
     /* Decision card */
     .decision-card {
@@ -179,23 +240,36 @@
 
     /* Library aside */
     .library-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.5); z-index: 200; display: none;
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
     }
     .library-overlay.open { display: block; }
-    .library-tray {
-      position: fixed; top: 0; right: -420px; width: 420px; height: 100%;
-      background: hsl(var(--py-bg)); border-left: 1px solid hsl(var(--py-border));
-      z-index: 201; transition: right var(--py-transition-slow);
-      display: flex; flex-direction: column;
+    .library-tray-aside {
+      position: fixed;
+      top: 0; right: -420px; bottom: 0;
+      width: 420px;
+      background: hsl(var(--py-card));
+      border-left: 1px solid hsl(var(--py-border));
+      z-index: 201;
+      transition: right 0.3s;
+      display: flex;
+      flex-direction: column;
     }
-    .library-tray.open { right: 0; }
+    .library-tray-aside.open { right: 0; }
     .library-tray-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: var(--py-space-3) var(--py-space-4);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem;
       border-bottom: 1px solid hsl(var(--py-border));
     }
-    .library-tray-body { flex: 1; overflow-y: auto; }
+    .library-tray-header h3 { font-size: 1rem; font-weight: 600; margin: 0; }
+    .library-tray-close {
+      background: none; border: none;
+      color: hsl(var(--py-fg)); font-size: 1.25rem; cursor: pointer;
+    }
 
     /* Training panel */
     .training-panel {
@@ -336,13 +410,26 @@
       <div id="challengeResult" style="display:none;"></div>
     </div>
 
-    <!-- Gravity Chart -->
-    <div class="gravity-container">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-2);">
-        <span class="py-text-sm py-text-bold">Prediction Gravity</span>
+    <!-- Price Chart (Candlestick + Predictions) -->
+    <div class="chart-container">
+      <div class="chart-toolbar">
+        <div style="display:flex;align-items:center;gap:var(--py-space-3);">
+          <span class="py-text-sm py-text-bold">ETH-USD</span>
+          <div class="tf-selector">
+            <button class="tf-btn active" onclick="switchTimeframe('1m')">1m</button>
+            <button class="tf-btn" onclick="switchTimeframe('3m')">3m</button>
+            <button class="tf-btn" onclick="switchTimeframe('5m')">5m</button>
+            <button class="tf-btn" onclick="switchTimeframe('15m')">15m</button>
+            <button class="tf-btn" onclick="switchTimeframe('1h')">1h</button>
+          </div>
+          <span class="ws-price-indicator">
+            <span class="dot off" id="wsPriceDot"></span>
+            <span id="wsPriceLabel">WS</span>
+          </span>
+        </div>
         <span class="py-text-xs py-text-muted" id="chartTimestamp">--</span>
       </div>
-      <canvas class="gravity-canvas" id="gravityCanvas"></canvas>
+      <canvas class="chart-canvas" id="priceCanvas"></canvas>
     </div>
 
     <!-- Decision Card -->
@@ -603,21 +690,24 @@
   </div>
 
   <!-- Library Side Tray -->
-  <div class="library-overlay" id="libraryOverlay" onclick="toggleLibrary()"></div>
-  <aside class="library-tray" id="libraryTray">
+  <div id="libraryOverlay" class="library-overlay" onclick="closeLibrary()"></div>
+  <aside id="libraryTray" class="library-tray-aside">
     <div class="library-tray-header">
-      <span class="py-text-bold">Pyrana Library</span>
-      <button class="py-btn py-btn-xs py-btn-ghost" onclick="toggleLibrary()">&times;</button>
+      <h3>Pyrana Library</h3>
+      <button class="library-tray-close" onclick="closeLibrary()">&times;</button>
     </div>
-    <div class="library-tray-body" id="libraryContainer"></div>
+    <div id="pyranaLibraryContainer" style="flex:1;overflow:hidden;"></div>
   </aside>
 
   <script>
     // ─── State ────────────────────────────────────────────────────────
+    // Auto-detect: if served from :9004, use same host for trading API
+    const _loc = window.location;
+    const _base = `${_loc.protocol}//${_loc.hostname}`;
     const CONFIG = {
-      tradingServerUrl: 'http://localhost:9004',
-      bridgeUrl: 'http://localhost:9002',
-      signalBotUrl: 'http://localhost:9502',
+      tradingServerUrl: _loc.port === '9004' ? `${_base}:9004` : `${_base}:9004`,
+      bridgeUrl: _loc.port === '9002' ? `${_base}:9002` : `${_base}:${_loc.port}`,
+      signalBotUrl: `${_base}:9502`,
       wsReconnectMin: 1000,
       wsReconnectMax: 10000,
     };
@@ -630,6 +720,13 @@
     let cxuStore = { axioms: [], regime_models: [], playbooks: [], learnings: [] };
     let reflectionHistory = [];
     let agentOutputs = {};
+
+    // Candlestick chart state
+    let activeTimeframe = '1m';
+    let candleData = {};   // { "1m": [{t,o,h,l,c}, ...], "5m": [...], ... }
+    let currentCandles = {};  // latest open candle per tf
+    let lastWsPrice = 0;
+    let wsPriceActive = false;
 
     // ─── Tab switching ──────────────────────────────────────────────
     function switchTab(tabId) {
@@ -663,10 +760,15 @@
 
     // ─── Library tray ───────────────────────────────────────────────
     function toggleLibrary() {
-      const overlay = document.getElementById('libraryOverlay');
       const tray = document.getElementById('libraryTray');
-      overlay.classList.toggle('open');
+      const overlay = document.getElementById('libraryOverlay');
       tray.classList.toggle('open');
+      overlay.classList.toggle('open');
+    }
+
+    function closeLibrary() {
+      document.getElementById('libraryTray').classList.remove('open');
+      document.getElementById('libraryOverlay').classList.remove('open');
     }
 
     // ─── WebSocket ──────────────────────────────────────────────────
@@ -688,7 +790,9 @@
       ws.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
-          if (msg.type === 'reflection') {
+          if (msg.type === 'priceUpdate') {
+            handlePriceUpdate(msg);
+          } else if (msg.type === 'reflection') {
             handleReflection(msg);
           } else if (msg.timestamp) {
             state = msg;
@@ -719,7 +823,7 @@
       renderKpis();
       renderDecision();
       renderPositionCards();
-      renderGravityChart();
+      renderCandlestickChart();
       renderSignals();
     }
 
@@ -875,128 +979,295 @@
       }
     }
 
-    // ─── Gravity chart ──────────────────────────────────────────────
-    function renderGravityChart() {
-      const canvas = document.getElementById('gravityCanvas');
+    // ─── Price update handler ──────────────────────────────────────
+    function handlePriceUpdate(msg) {
+      const price = msg.price;
+      if (!price) return;
+
+      lastWsPrice = price;
+      wsPriceActive = true;
+      document.getElementById('wsPriceDot').className = 'dot';
+      document.getElementById('wsPriceLabel').textContent = `WS ~${(1000 / 12).toFixed(0)}ms`;
+
+      // Update price history for market strip coloring
+      priceHistory.push(price);
+      if (priceHistory.length > 720) priceHistory.shift();
+
+      // Merge closed candles
+      if (msg.closedCandles) {
+        for (const [tf, candle] of Object.entries(msg.closedCandles)) {
+          if (!candleData[tf]) candleData[tf] = [];
+          candleData[tf].push(candle);
+          if (candleData[tf].length > 500) candleData[tf].shift();
+        }
+      }
+
+      // Update current (open) candles
+      if (msg.currentCandles) {
+        currentCandles = msg.currentCandles;
+      }
+
+      // Update mark price display
+      const el = document.getElementById('markPrice');
+      el.textContent = `$${Number(price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      if (priceHistory.length > 1) {
+        const prev = priceHistory[priceHistory.length - 2];
+        el.className = 'mark-price ' + (price > prev ? 'price-up' : price < prev ? 'price-down' : 'price-flat');
+      }
+
+      // Re-render chart
+      renderCandlestickChart();
+    }
+
+    // ─── Timeframe switching ────────────────────────────────────────
+    async function switchTimeframe(tf) {
+      activeTimeframe = tf;
+      document.querySelectorAll('.tf-btn').forEach(b => {
+        b.classList.toggle('active', b.textContent === tf);
+      });
+      // Fetch historical candles for this timeframe
+      try {
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/candles?timeframe=${tf}&limit=300`);
+        if (resp.ok) {
+          const data = await resp.json();
+          candleData[tf] = data.candles || [];
+        }
+      } catch (e) { /* server not available */ }
+      renderCandlestickChart();
+    }
+
+    // ─── Candlestick chart ──────────────────────────────────────────
+    function renderCandlestickChart() {
+      const canvas = document.getElementById('priceCanvas');
       const ctx = canvas.getContext('2d');
       const rect = canvas.parentElement.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       canvas.width = rect.width * dpr;
-      canvas.height = 320 * dpr;
+      canvas.height = 400 * dpr;
       canvas.style.width = rect.width + 'px';
-      canvas.style.height = '320px';
+      canvas.style.height = '400px';
       ctx.scale(dpr, dpr);
-      const W = rect.width, H = 320;
+      const W = rect.width, H = 400;
 
+      // Background
       ctx.fillStyle = 'hsl(222 47% 6%)';
       ctx.fillRect(0, 0, W, H);
 
-      if (priceHistory.length < 2) {
+      // Build candle array: closed candles + current open candle
+      const tf = activeTimeframe;
+      const closed = candleData[tf] || [];
+      const current = currentCandles[tf];
+      const candles = [...closed];
+      if (current) {
+        // Replace or append current candle
+        if (candles.length > 0 && candles[candles.length - 1].t === current.t) {
+          candles[candles.length - 1] = current;
+        } else {
+          candles.push(current);
+        }
+      }
+
+      if (candles.length < 2) {
         ctx.fillStyle = 'hsl(222 10% 40%)';
         ctx.font = '14px system-ui';
         ctx.textAlign = 'center';
-        ctx.fillText('Waiting for price data...', W/2, H/2);
+        ctx.fillText('Waiting for candle data...', W/2, H/2);
+        ctx.font = '11px system-ui';
+        ctx.fillText(`Collecting ${tf} candles from Hyperliquid WebSocket`, W/2, H/2 + 20);
         return;
       }
 
-      const margin = { top: 20, right: 70, bottom: 30, left: 10 };
+      // Show last N candles that fit the width
+      const margin = { top: 20, right: 75, bottom: 30, left: 10 };
       const plotW = W - margin.left - margin.right;
       const plotH = H - margin.top - margin.bottom;
+      const candleWidth = Math.max(3, Math.min(12, plotW / 120));
+      const gap = Math.max(1, candleWidth * 0.3);
+      const step = candleWidth + gap;
+      const maxCandles = Math.floor(plotW / step);
+      const visible = candles.slice(-maxCandles);
 
-      // Price range
-      const prices = priceHistory.slice(-180);
+      // Price range from visible candles + predictions
       const predictions = state.predictions || [];
-      let allPrices = [...prices];
+      let allPrices = [];
+      visible.forEach(c => { allPrices.push(c.h, c.l); });
       predictions.forEach(p => { if (p.targetPrice) allPrices.push(p.targetPrice); });
-      const minP = Math.min(...allPrices) * 0.9998;
-      const maxP = Math.max(...allPrices) * 1.0002;
+      if (allPrices.length === 0) return;
+
+      const dataMin = Math.min(...allPrices);
+      const dataMax = Math.max(...allPrices);
+      const pad = (dataMax - dataMin) * 0.05 || 1;
+      const minP = dataMin - pad;
+      const maxP = dataMax + pad;
       const priceRange = maxP - minP || 1;
 
-      const toX = (i) => margin.left + (i / (prices.length - 1)) * plotW;
       const toY = (p) => margin.top + (1 - (p - minP) / priceRange) * plotH;
 
-      // Grid
+      // Grid lines
       ctx.strokeStyle = 'hsl(222 10% 15%)';
       ctx.lineWidth = 0.5;
-      const niceStep = Math.pow(10, Math.floor(Math.log10(priceRange))) / 2;
+      const niceStep = _niceGridStep(priceRange);
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
       for (let p = Math.ceil(minP / niceStep) * niceStep; p <= maxP; p += niceStep) {
         const y = toY(p);
         ctx.beginPath(); ctx.moveTo(margin.left, y); ctx.lineTo(W - margin.right, y); ctx.stroke();
         ctx.fillStyle = 'hsl(222 10% 40%)';
-        ctx.font = '11px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText(`$${p.toFixed(2)}`, W - margin.right + 5, y + 4);
+        ctx.fillText(`$${p.toFixed(2)}`, W - margin.right + 5, y + 3);
       }
 
-      // Price line
-      ctx.beginPath();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
-      prices.forEach((p, i) => {
-        const x = toX(i), y = toY(p);
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      // Time labels along bottom
+      ctx.fillStyle = 'hsl(222 10% 35%)';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      const labelInterval = Math.max(1, Math.floor(visible.length / 8));
+      visible.forEach((c, i) => {
+        if (i % labelInterval !== 0) return;
+        const x = margin.left + i * step + candleWidth / 2;
+        const d = new Date(c.t * 1000);
+        const label = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+        ctx.fillText(label, x, H - margin.bottom + 14);
       });
-      ctx.stroke();
 
-      // Current price dot
-      const lastX = toX(prices.length - 1);
-      const lastY = toY(prices[prices.length - 1]);
-      ctx.beginPath();
-      ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff';
-      ctx.fill();
+      // Draw candles
+      visible.forEach((c, i) => {
+        const x = margin.left + i * step;
+        const bullish = c.c >= c.o;
+        const bodyColor = bullish ? 'hsl(145 60% 42%)' : 'hsl(0 65% 50%)';
+        const wickColor = bullish ? 'hsl(145 40% 55%)' : 'hsl(0 45% 60%)';
 
-      // Now line
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = 'hsl(220 90% 60%)';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(lastX, margin.top); ctx.lineTo(lastX, H - margin.bottom); ctx.stroke();
-      ctx.setLineDash([]);
+        const openY = toY(c.o);
+        const closeY = toY(c.c);
+        const highY = toY(c.h);
+        const lowY = toY(c.l);
+        const bodyTop = Math.min(openY, closeY);
+        const bodyHeight = Math.max(1, Math.abs(closeY - openY));
+        const wickX = x + candleWidth / 2;
 
-      // Predictions
-      const nowPrice = prices[prices.length - 1];
-      predictions.forEach(pred => {
-        if (!pred.targetPrice) return;
-        const isLong = pred.direction === 'LONG';
-        const color = pred.source === 'agdel' ? 'hsl(220 80% 60%)' : 'hsl(270 60% 60%)';
-        const alpha = pred.expired ? 0.3 : 0.8;
-
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = color;
+        // Wick
+        ctx.strokeStyle = wickColor;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(lastX, toY(nowPrice));
-        ctx.lineTo(lastX + 60, toY(pred.targetPrice));
+        ctx.moveTo(wickX, highY);
+        ctx.lineTo(wickX, lowY);
         ctx.stroke();
 
-        const r = Math.max(3, (pred.qualityScore || 0.5) * 8);
-        ctx.beginPath();
-        ctx.arc(lastX + 60, toY(pred.targetPrice), r, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        // Body
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(x, bodyTop, candleWidth, bodyHeight);
       });
+
+      // Current price line (dashed)
+      const nowPrice = lastWsPrice || (visible.length > 0 ? visible[visible.length - 1].c : 0);
+      if (nowPrice > 0) {
+        const nowY = toY(nowPrice);
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = 'hsl(220 80% 60%)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(margin.left, nowY); ctx.lineTo(W - margin.right, nowY); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Price label on right
+        ctx.fillStyle = 'hsl(220 80% 60%)';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+        const priceLabel = `$${nowPrice.toFixed(2)}`;
+        const labelW = ctx.measureText(priceLabel).width + 8;
+        ctx.fillRect(W - margin.right + 1, nowY - 8, labelW, 16);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText(priceLabel, W - margin.right + 5, nowY + 4);
+      }
+
+      // Predictions (from the last candle forward)
+      if (visible.length > 0) {
+        const lastCandleX = margin.left + (visible.length - 1) * step + candleWidth / 2;
+        predictions.forEach(pred => {
+          if (!pred.targetPrice) return;
+          const color = pred.source === 'agdel' ? 'hsl(220 80% 60%)' : 'hsl(270 60% 60%)';
+          const alpha = pred.expired ? 0.25 : 0.7;
+          ctx.globalAlpha = alpha;
+
+          // Line from current price to target
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(lastCandleX, toY(nowPrice));
+          ctx.lineTo(lastCandleX + 50, toY(pred.targetPrice));
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Target dot
+          const r = Math.max(3, (pred.qualityScore || 0.5) * 7);
+          ctx.beginPath();
+          ctx.arc(lastCandleX + 50, toY(pred.targetPrice), r, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+      }
 
       // SL/TP lines
       const risk = state.riskLevels || {};
-      if (risk.slPrice) {
+      if (risk.slPrice && risk.slPrice >= minP && risk.slPrice <= maxP) {
+        const slY = toY(risk.slPrice);
         ctx.setLineDash([6, 3]);
         ctx.strokeStyle = 'hsl(0 70% 50%)';
         ctx.lineWidth = 1;
-        const slY = toY(risk.slPrice);
         ctx.beginPath(); ctx.moveTo(margin.left, slY); ctx.lineTo(W - margin.right, slY); ctx.stroke();
         ctx.setLineDash([]);
+        ctx.fillStyle = 'hsl(0 70% 50%)';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`SL $${Number(risk.slPrice).toFixed(2)}`, W - margin.right - 4, slY - 3);
       }
-      if (risk.tpPrice) {
-        ctx.setLineDash([6, 3]);
-        ctx.strokeStyle = 'hsl(120 70% 40%)';
-        ctx.lineWidth = 1;
+      if (risk.tpPrice && risk.tpPrice >= minP && risk.tpPrice <= maxP) {
         const tpY = toY(risk.tpPrice);
+        ctx.setLineDash([6, 3]);
+        ctx.strokeStyle = 'hsl(145 60% 42%)';
+        ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(margin.left, tpY); ctx.lineTo(W - margin.right, tpY); ctx.stroke();
         ctx.setLineDash([]);
+        ctx.fillStyle = 'hsl(145 60% 42%)';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`TP $${Number(risk.tpPrice).toFixed(2)}`, W - margin.right - 4, tpY - 3);
+      }
+
+      // Breakeven line (entry + round-trip taker fees)
+      const pos = state.position || state.hlPosition || {};
+      if (pos.entryPrice && pos.side && pos.side !== 'flat' && pos.side !== 'FLAT') {
+        const TAKER_FEE = 0.000432; // 0.0432% per side
+        const isLong = pos.side === 'long' || pos.side === 'LONG';
+        const breakeven = isLong
+          ? pos.entryPrice * (1 + 2 * TAKER_FEE)
+          : pos.entryPrice * (1 - 2 * TAKER_FEE);
+        const beY = toY(breakeven);
+        if (beY > margin.top && beY < H - margin.bottom) {
+          ctx.setLineDash([2, 4]);
+          ctx.strokeStyle = 'hsl(45 80% 55%)';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(margin.left, beY); ctx.lineTo(W - margin.right, beY); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = 'hsl(45 80% 55%)';
+          ctx.font = '9px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillText(`BE $${breakeven.toFixed(2)} (entry + RT fees)`, W - margin.right - 4, beY - 3);
+        }
       }
 
       document.getElementById('chartTimestamp').textContent = new Date().toLocaleTimeString();
+    }
+
+    function _niceGridStep(range) {
+      const raw = range / 6;
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const norm = raw / mag;
+      if (norm <= 1) return mag;
+      if (norm <= 2) return 2 * mag;
+      if (norm <= 5) return 5 * mag;
+      return 10 * mag;
     }
 
     // ─── Signals ────────────────────────────────────────────────────
@@ -1100,31 +1371,25 @@
     // ─── Load CxUs from local files ─────────────────────────────────
     async function loadCxUs() {
       try {
-        const resp = await fetch('/pyrana-objects/cxus/');
-        if (!resp.ok) {
-          // Try loading individual known files
-          const knownFiles = [
-            'axiom-fee-kill.json', 'axiom-hold-default.json',
-            'axiom-signal-direction-broken.json', 'axiom-max-size-or-skip.json',
-            'regime-ranging.json', 'regime-trending.json', 'regime-volatile.json',
-            'playbook-ranging.json', 'playbook-trending.json', 'playbook-volatile.json',
-            'learning-signal-accuracy-by-type.json', 'learning-strategy-performance.json'
-          ];
-          const cxus = [];
-          for (const f of knownFiles) {
-            try {
-              const r = await fetch(`/pyrana-objects/cxus/${f}`);
-              if (r.ok) cxus.push(await r.json());
-            } catch (e) { /* skip */ }
-          }
-          categorizeCxUs(cxus);
+        // Load from trading server API (always has the full set)
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/cxus`);
+        if (resp.ok) {
+          const data = await resp.json();
+          categorizeCxUs(data.cxus || []);
           return;
         }
-        // If directory listing works, parse it
-        const text = await resp.text();
-        const files = text.match(/href="([^"]+\.json)"/g)?.map(m => m.match(/href="([^"]+)"/)[1]) || [];
+      } catch (e) { /* trading server not available, try static files */ }
+      try {
+        // Fallback: load from static files
+        const knownFiles = [
+          'axiom-fee-kill.json', 'axiom-hold-default.json',
+          'axiom-signal-direction-broken.json', 'axiom-max-size-or-skip.json',
+          'regime-ranging.json', 'regime-trending.json', 'regime-volatile.json',
+          'playbook-ranging.json', 'playbook-trending.json', 'playbook-volatile.json',
+          'learning-signal-accuracy-by-type.json', 'learning-strategy-performance.json'
+        ];
         const cxus = [];
-        for (const f of files) {
+        for (const f of knownFiles) {
           try {
             const r = await fetch(`/pyrana-objects/cxus/${f}`);
             if (r.ok) cxus.push(await r.json());
@@ -1259,6 +1524,93 @@
     }
 
     // ─── Agent output ───────────────────────────────────────────────
+    // ─── PyranaLibrary (proper init with expanded view) ────────────
+    function initPyranaLibrary() {
+      const container = document.getElementById('pyranaLibraryContainer');
+      if (!container || typeof PyranaLibrary === 'undefined') {
+        console.warn('[Dashboard] PyranaLibrary not available');
+        return;
+      }
+
+      PyranaLibrary.init(container, {
+        apiBases: {
+          cxu: '',
+          prompt: '',
+          script: '',
+          agent: '',
+        },
+        hiddenApis: [],
+      });
+
+      PyranaLibrary.onItemOpened = (item) => {
+        // CxU pill enhancement after item opens
+        setTimeout(() => {
+          if (typeof CxuPill !== 'undefined') {
+            document.querySelectorAll('.cxu-pill').forEach(el => {
+              // Pills are already rendered by the library
+            });
+          }
+        }, 50);
+      };
+    }
+
+    function openLocalItemModal(rawItem, itemId, apiType) {
+      if (typeof LibraryApiClient === 'undefined' || typeof LibraryModal === 'undefined') {
+        alert(JSON.stringify(rawItem, null, 2));
+        return;
+      }
+
+      if (typeof PyranaLibraryStyles !== 'undefined') PyranaLibraryStyles.inject();
+
+      LibraryModal.init(document.body, {});
+
+      const config = LibraryApiClient.API_CONFIG[apiType];
+      const item = LibraryApiClient.flattenApiResponse ? LibraryApiClient.flattenApiResponse(rawItem) : rawItem;
+
+      if (LibraryModal.setItemContext) LibraryModal.setItemContext(item, itemId, apiType);
+
+      let bodyHtml = '';
+      if (typeof LibraryExpandedView !== 'undefined') {
+        bodyHtml = LibraryExpandedView.generate(item, config, false);
+      } else {
+        bodyHtml = `<pre style="font-size:0.75rem;max-height:400px;overflow:auto;">${JSON.stringify(item, null, 2)}</pre>`;
+      }
+
+      const alias = item?.alias || rawItem?.alias || '';
+      const title = `View ${config ? config.name.slice(0, -1) : 'Item'}${alias ? ' — ' + alias : ''}`;
+      const status = item?.status || rawItem?.mutable_metadata?.status;
+      LibraryModal.open(title, bodyHtml, {
+        itemId,
+        status: apiType === 'cxu_manager' ? status : null
+      });
+
+      const modalBody = document.getElementById('libraryModalBody');
+      if (modalBody && typeof LibraryExpandedView !== 'undefined') {
+        LibraryExpandedView.bindEvents(modalBody);
+      }
+
+      const closeBtn = document.getElementById('libraryModalClose');
+      const modalOverlay = document.getElementById('libraryModalOverlay');
+      if (closeBtn) closeBtn.onclick = (e) => { e.stopPropagation(); LibraryModal.close(); };
+      if (modalOverlay) modalOverlay.onclick = (e) => { if (e.target === modalOverlay) LibraryModal.close(); };
+    }
+
+    function openCxuDetail(ref) {
+      // Find CxU from local store
+      const allCxus = Object.values(cxuStore).flat();
+      const rawItem = allCxus.find(c => c.cxu_id === ref || c.alias === ref);
+      if (!rawItem) {
+        console.warn('CxU not found:', ref);
+        return;
+      }
+      openLocalItemModal(rawItem, rawItem.cxu_id, 'cxu_manager');
+    }
+
+    // Global hook for CxuPill click → opens expanded view
+    window.openCxuInResourcesTray = function(cxuId, cxuAlias) {
+      openCxuDetail(cxuId || cxuAlias);
+    };
+
     function renderAgentOutput() {
       const grid = document.getElementById('agentOutputGrid');
       const agents = ['regime-classifier', 'signal-assessor', 'trade-decider', 'reflector'];
@@ -1437,20 +1789,11 @@
       // Load CxUs from local files
       await loadCxUs();
 
-      // Initialize Library tray
-      try {
-        if (typeof PyranaLibrary !== 'undefined') {
-          PyranaLibrary.init(document.getElementById('libraryContainer'), {
-            apiBases: {
-              cxu: 'http://localhost:8001',
-              script: 'http://localhost:8002',
-              prompt: 'http://localhost:8003',
-              agent: 'http://localhost:8105'
-            },
-            requiredTag: 'agdel-trader-bot'
-          });
-        }
-      } catch (e) { console.warn('Library init failed (services may not be running)'); }
+      // Initialize PyranaLibrary with empty API bases (relative paths to trading server)
+      initPyranaLibrary();
+
+      // Load initial candle data for default timeframe
+      await switchTimeframe(activeTimeframe);
 
       // Connect WebSocket to trading server
       connectWs();
