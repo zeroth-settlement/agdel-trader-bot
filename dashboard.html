@@ -69,6 +69,53 @@
       --color-agent-dim: var(--py-agent-bg);
     }
 
+    /* ============================================================
+       Expanded View textarea overrides
+       The shared expanded-view.js renders long text fields as
+       readonly textareas with rows=4. Override to make them
+       auto-size, readable, and properly styled.
+       ============================================================ */
+    .resources-modal-field textarea,
+    .library-modal-field textarea {
+      width: 100% !important;
+      min-height: 80px !important;
+      field-sizing: content;
+      padding: 12px !important;
+      background: var(--bg-tertiary) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 8px !important;
+      color: var(--text-primary) !important;
+      font-family: var(--py-font-sans) !important;
+      font-size: 13px !important;
+      line-height: 1.6 !important;
+      resize: vertical !important;
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+    }
+    .resources-modal-field textarea[readonly],
+    .library-modal-field textarea[readonly] {
+      cursor: default;
+      opacity: 0.9;
+      border-color: transparent !important;
+      background: var(--bg-tertiary) !important;
+    }
+    /* Make the modal content scrollable */
+    .library-modal-body {
+      overflow-y: auto !important;
+      max-height: calc(85vh - 120px) !important;
+      padding: 20px !important;
+    }
+    /* Fix input fields in identifier section */
+    .resources-modal-field input[readonly] {
+      background: var(--bg-tertiary) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 6px !important;
+      color: var(--text-primary) !important;
+      padding: 8px 12px !important;
+      font-family: 'SF Mono', Monaco, monospace !important;
+      font-size: 11px !important;
+    }
+
     /* Layout-specific styles only — theme comes from design guide */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: var(--py-font-sans); background: hsl(var(--py-bg)); color: hsl(var(--py-fg)); min-height: 100vh; }

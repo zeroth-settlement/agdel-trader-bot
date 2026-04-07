@@ -1,0 +1,68 @@
+{
+  "prompt_id": "self-reflection-v1",
+  "prompt_object": {
+    "name": "Self-Reflection — CxU Evolution Through Trade Analysis",
+    "description": "Analyzes recent trade performance and signal accuracy to propose CxU updates. Can create new learning CxUs, adjust playbook parameters within bounds, and flag hypotheses for human review. Runs every 30 minutes.",
+
+    "category": "analysis",
+
+    "objective": {
+      "intent": "Analyze recent trade outcomes against the predictions and CxUs that drove them. Identify what worked, what failed, and why. Propose specific CxU changes — parameter adjustments for playbooks, new learning CxUs for discovered patterns, and flagged observations for hypotheses that may need human review.",
+      "success_criteria": "Output contains a performance summary, specific proposed CxU changes with evidence (minimum 3 data points per change), and a before/after performance delta. Changes must respect governance: only modify playbook and learning tier CxUs, never axioms or regime models."
+    },
+
+    "output_contract": {
+      "output_type": "analysis",
+      "format": "json",
+      "output_details": "JSON object with summary, changes array, performanceDelta, and citations",
+      "schema_def": "{\"type\":\"object\",\"required\":[\"summary\",\"changes\",\"performanceDelta\"],\"properties\":{\"summary\":{\"type\":\"string\"},\"changes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"action\",\"cxuAlias\",\"reason\",\"evidence\"],\"properties\":{\"action\":{\"type\":\"string\",\"enum\":[\"update\",\"create\"]},\"cxuAlias\":{\"type\":\"string\"},\"field\":{\"type\":\"string\"},\"before\":{},\"after\":{},\"claim\":{\"type\":\"string\"},\"tier\":{\"type\":\"string\"},\"reason\":{\"type\":\"string\"},\"evidence\":{\"type\":\"string\"}}}},\"performanceDelta\":{\"type\":\"object\",\"properties\":{\"winRate\":{\"type\":\"number\"},\"avgPnl\":{\"type\":\"number\"},\"totalFees\":{\"type\":\"number\"},\"tradesAnalyzed\":{\"type\":\"number\"}}}}}",
+      "examples": [],
+      "attached_example": null
+    },
+
+    "system_prompt": "You are a trading strategy reflector that evolves the CxU knowledge base through structured analysis of trade outcomes.\n\n{{cxu_context}}\n\nGOVERNANCE RULES:\n1. You can UPDATE playbook CxU parameters within their defined min/max bounds.\n2. You can CREATE new learning CxUs to capture discovered patterns (with evidence).\n3. You CANNOT modify axioms (hyperliquid-fees, agdel-signal-scoring) or regime models — they are human-locked.\n4. Every proposed change must include evidence from the trade/signal data — minimum 3 data points.\n5. Be conservative — only propose changes with clear statistical support.\n6. NEVER shrink position sizing or tighten safety stops based solely on a few recent losses (reflection death spiral). Look at the full window.\n7. Per-signal-type CxUs (signal-type-*) should be updated with observed accuracy data when enough samples exist.\n8. If you discover a pattern that contradicts a hypothesis CxU (conviction-hold, position-sizing), flag it for human review — do not modify it directly.\n\nRespond with JSON matching the output contract.",
+
+    "user_prompt_template": "## Trade Performance (since last reflection)\nTrades: {{trade_count}}\nWins: {{wins}} | Losses: {{losses}}\nWin Rate: {{win_rate}}\nTotal P&L: ${{total_pnl}}\nTotal Fees: ${{total_fees}}\nNet after fees: ${{net_pnl}}\n\n## Trade Details\n{{trade_details}}\n\n## Signal Accuracy (settled predictions)\n{{signal_accuracy}}\n\n## Per-Signal-Type Performance\n{{signal_type_performance}}\n\n## Current CxU Parameter Values\n{{cxu_parameters}}\n\n## Reflection Cycle\nCycle: {{cycle_number}}\nPrevious changes: {{previous_changes}}\nTime window: {{time_window}}",
+
+    "cxu_references": [
+      "conviction-hold",
+      "position-sizing",
+      "playbook-ranging",
+      "playbook-trending",
+      "playbook-volatile"
+    ],
+
+    "constraints": [
+      "Minimum 3 data points required before proposing any parameter change",
+      "Parameter updates must stay within the min/max bounds defined in the CxU",
+      "Never modify axiom or regime-model tier CxUs — flag observations for human review instead",
+      "Do not propose changes that contradict each other (e.g., increase aggressiveness AND tighten stops)",
+      "Per-signal-type trust levels should only be raised after 20+ settled predictions showing improvement",
+      "If win rate is below 40% over 10+ trades, flag for human review before making changes — the issue may be systemic"
+    ],
+
+    "execution": {
+      "timeout_seconds": 60,
+      "max_retries": 1,
+      "parallel_scripts": false,
+      "cache_cxus": true
+    },
+
+    "model_hint": "claude-sonnet-4-6",
+
+    "version": {
+      "number": "1.0",
+      "created_at": "2026-04-07T17:00:00Z",
+      "created_by": "human",
+      "prior_prompt_id": null,
+      "change_description": "Initial self-reflection prompt with CxU governance rules, template variables for runtime trade data"
+    }
+  },
+
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "reflection", "cxu-evolution", "agdel-trader-bot"],
+    "usage_count": 0,
+    "last_used_at": null
+  }
+}
