@@ -43,6 +43,7 @@ from agents.regime_classifier import RegimeClassifier
 from agents.signal_assessor import SignalAssessor
 from agents.trade_decider import TradeDecider
 from agents.reflector import Reflector
+from agents.trainer import Trainer, TrainingInstruction
 
 load_dotenv()
 
@@ -74,6 +75,8 @@ regime_classifier: Optional[RegimeClassifier] = None
 signal_assessor: Optional[SignalAssessor] = None
 trade_decider: Optional[TradeDecider] = None
 reflector: Optional[Reflector] = None
+trainer: Optional[Trainer] = None
+training_mode: bool = False
 
 trade_history: List[Dict] = []
 tick_history: deque = deque(maxlen=720)
@@ -146,6 +149,7 @@ async def lifespan(app: FastAPI):
     signal_assessor = SignalAssessor(config, cxu_store)
     trade_decider = TradeDecider(config, cxu_store)
     reflector = Reflector(config, cxu_store)
+    trainer = Trainer(config, cxu_store)
 
     # Connect to Hyperliquid
     try:
@@ -443,6 +447,9 @@ async def _broadcast_state(mark_price: float, position: dict):
         # AGDEL
         "agdel": agdel_stats,
 
+        # Training mode
+        "trainingMode": training_mode,
+
         # Performance (computed from trade history)
         "performance": _compute_performance(),
 
@@ -638,6 +645,125 @@ async def toggle_autobuy():
 async def buy_signal(body: dict):
     # TODO: wire to agdel_buyer
     return {"status": "not_implemented"}
+
+
+# ─── Training Mode API ───────────────────────────────────────────
+
+@app.post("/api/training/toggle")
+async def toggle_training():
+    global training_mode
+    training_mode = not training_mode
+    logger.info("Training mode: %s", "ON" if training_mode else "OFF")
+    return {"trainingMode": training_mode}
+
+
+@app.post("/api/training/instruct")
+async def training_instruct(body: dict):
+    """Submit a manual trading instruction.
+
+    Body:
+        action: "buy" | "sell" | "close"
+        reasoning: "why you want to do this"
+        conditions: "what conditions you see" (optional)
+        force: true to skip challenge (optional)
+
+    Returns a challenge response if the agent disagrees,
+    or executes the trade and creates a learning CxU if it agrees.
+    """
+    if not trainer or not hl_trader:
+        return JSONResponse({"error": "Trainer not initialized"}, status_code=400)
+
+    action = body.get("action", "").lower()
+    if action not in ("buy", "sell", "close"):
+        return JSONResponse({"error": "action must be buy, sell, or close"}, status_code=400)
+
+    reasoning = body.get("reasoning", "")
+    if not reasoning:
+        return JSONResponse({"error": "reasoning is required — tell the agent why"}, status_code=400)
+
+    instruction = TrainingInstruction(
+        action=action,
+        reasoning=reasoning,
+        conditions=body.get("conditions", ""),
+        force=body.get("force", False),
+    )
+
+    # Get current market context
+    mark_price = await hl_trader.get_mark_price()
+    position = await hl_trader.get_position()
+    pos_dict = position.to_dict() if position else {}
+
+    regime = latest_regime.get("data", {}).get("regime", "unknown")
+    indicators = latest_regime.get("data", {}).get("indicators", {})
+    consensus = latest_signal_assessment.get("data", {}).get("consensus", {})
+
+    # Evaluate the instruction against CxUs
+    challenge = await trainer.evaluate_instruction(
+        instruction=instruction,
+        mark_price=mark_price,
+        regime=regime,
+        indicators=indicators,
+        signal_consensus=consensus,
+        position=pos_dict,
+    )
+
+    if not challenge.agrees and not instruction.force:
+        # Return the challenge — user must force-override or accept
+        return {
+            "status": "challenged",
+            "challenge": challenge.to_dict(),
+            "message": "The agent disagrees with your instruction. Use force=true to override.",
+        }
+
+    # Agent agrees (or user forced) — execute the trade
+    trade_action = "open_long" if action == "buy" else "open_short" if action == "sell" else "close"
+    result = await hl_trader.execute(trade_action, 100, mark_price)
+
+    if not result or not result.success:
+        return JSONResponse({"error": "Trade execution failed"}, status_code=500)
+
+    # Record the trade
+    _record_trade(
+        result,
+        f"Training: {reasoning}",
+        mark_price,
+        regime=regime,
+        citations=[c for c in challenge.conflicting_cxus],
+    )
+
+    # Update risk manager
+    if risk_manager and trade_action != "close":
+        new_pos = await hl_trader.get_position()
+        if new_pos and new_pos.side != "FLAT":
+            risk_manager.reset_watermark(new_pos.entry_price or mark_price, new_pos.side)
+
+    # Create a learning CxU from this instruction
+    learning_cxu = trainer.create_training_cxu(
+        instruction=instruction,
+        mark_price=mark_price,
+        regime=regime,
+        indicators=indicators,
+        signal_consensus=consensus,
+    )
+
+    # Record pending outcome for when the trade closes
+    trade_id = f"training-{instruction.timestamp}"
+    trainer.record_pending_outcome(trade_id, {
+        "cxu_alias": learning_cxu.alias,
+        "instruction": instruction.__dict__,
+    })
+
+    return {
+        "status": "executed",
+        "action": trade_action,
+        "price": mark_price,
+        "challenge": challenge.to_dict(),
+        "learningCxu": {
+            "alias": learning_cxu.alias,
+            "claim": learning_cxu.claim,
+        },
+        "message": f"Trade executed. Learning CxU '{learning_cxu.alias}' created.",
+    }
 
 
 # ─── Main ────────────────────────────────────────────────────────

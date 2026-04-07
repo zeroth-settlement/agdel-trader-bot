@@ -197,6 +197,27 @@
     }
     .library-tray-body { flex: 1; overflow-y: auto; }
 
+    /* Training panel */
+    .training-panel {
+      background: hsl(var(--py-card)); border: 2px solid hsl(var(--py-warning) / 0.4);
+      border-radius: var(--py-radius); padding: var(--py-space-4);
+      margin-bottom: var(--py-space-4); display: none;
+    }
+    .training-panel.active { display: block; }
+    .training-input { display: flex; gap: var(--py-space-2); margin-top: var(--py-space-3); }
+    .training-input textarea {
+      flex: 1; background: hsl(var(--py-bg)); border: 1px solid hsl(var(--py-border));
+      border-radius: var(--py-radius-sm); padding: var(--py-space-2);
+      color: hsl(var(--py-fg)); font-family: var(--py-font-sans); font-size: 0.85rem;
+      resize: vertical; min-height: 60px;
+    }
+    .training-actions { display: flex; gap: var(--py-space-2); margin-top: var(--py-space-3); }
+    .challenge-card {
+      background: hsl(var(--py-warning) / 0.1); border: 1px solid hsl(var(--py-warning) / 0.3);
+      border-radius: var(--py-radius); padding: var(--py-space-3);
+      margin-top: var(--py-space-3);
+    }
+
     /* Empty state */
     .empty-state { text-align: center; padding: var(--py-space-8); color: hsl(var(--py-fg-muted)); }
     .empty-state-icon { font-size: 2rem; margin-bottom: var(--py-space-3); }
@@ -218,6 +239,7 @@
       </span>
     </div>
     <div class="app-header-right">
+      <button class="py-btn py-btn-sm py-btn-outline" id="trainingToggle" onclick="toggleTraining()" style="border-color:hsl(var(--py-warning));">Training: OFF</button>
       <button class="py-btn py-btn-sm py-btn-outline" id="autoTradeToggle" onclick="toggleAutoTrade()">Auto Trade: OFF</button>
       <button class="py-btn py-btn-sm py-btn-ghost" onclick="toggleLibrary()">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.5A.5.5 0 0 1 1.5 2h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 2.5zm0 4A.5.5 0 0 1 1.5 6h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 6.5zm0 4A.5.5 0 0 1 1.5 10h13a.5.5 0 0 1 0 1h-13a.5.5 0 0 1-.5-.5z"/></svg>
@@ -293,6 +315,25 @@
         <div class="kpi-label">Trades Today</div>
         <div class="kpi-value" id="kpiTradesToday">0</div>
       </div>
+    </div>
+
+    <!-- Training Panel -->
+    <div class="training-panel" id="trainingPanel">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <span class="py-text-bold" style="color:hsl(var(--py-warning));">Training Mode</span>
+          <span class="py-text-xs py-text-muted" style="margin-left:var(--py-space-2);">Tell the agent when to trade and why — it learns from you</span>
+        </div>
+      </div>
+      <div class="training-input">
+        <textarea id="trainingReasoning" placeholder="Why do you want to trade? What conditions do you see? (e.g., 'Price hitting support at $1950 with declining volume, expecting a bounce')"></textarea>
+      </div>
+      <div class="training-actions">
+        <button class="py-btn py-btn-sm" style="background:hsl(var(--py-success));color:#fff;" onclick="trainInstruct('buy')">Buy (Long)</button>
+        <button class="py-btn py-btn-sm" style="background:hsl(var(--py-error));color:#fff;" onclick="trainInstruct('sell')">Sell (Short)</button>
+        <button class="py-btn py-btn-sm py-btn-outline" onclick="trainInstruct('close')">Close Position</button>
+      </div>
+      <div id="challengeResult" style="display:none;"></div>
     </div>
 
     <!-- Gravity Chart -->
@@ -724,6 +765,15 @@
       const atBtn = document.getElementById('autoTradeToggle');
       atBtn.textContent = `Auto Trade: ${state.autoTrade ? 'ON' : 'OFF'}`;
       atBtn.className = `py-btn py-btn-sm ${state.autoTrade ? 'py-btn-primary' : 'py-btn-outline'}`;
+
+      // Training mode
+      if (state.trainingMode) {
+        document.getElementById('trainingPanel').classList.add('active');
+        const tBtn = document.getElementById('trainingToggle');
+        tBtn.textContent = 'Training: ON';
+        tBtn.style.background = 'hsl(var(--py-warning))';
+        tBtn.style.color = '#fff';
+      }
     }
 
     // ─── KPIs ───────────────────────────────────────────────────────
@@ -1243,6 +1293,91 @@
           }
         }
       });
+    }
+
+    // ─── Training Mode ────────────────────────────────────────────
+    async function toggleTraining() {
+      try {
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/training/toggle`, { method: 'POST' });
+        const data = await resp.json();
+        const panel = document.getElementById('trainingPanel');
+        const btn = document.getElementById('trainingToggle');
+        if (data.trainingMode) {
+          panel.classList.add('active');
+          btn.textContent = 'Training: ON';
+          btn.style.background = 'hsl(var(--py-warning))';
+          btn.style.color = '#fff';
+        } else {
+          panel.classList.remove('active');
+          btn.textContent = 'Training: OFF';
+          btn.style.background = '';
+          btn.style.color = '';
+        }
+      } catch (e) { console.warn('Could not toggle training'); }
+    }
+
+    async function trainInstruct(action, force = false) {
+      const reasoning = document.getElementById('trainingReasoning').value.trim();
+      if (!reasoning) {
+        alert('Please explain your reasoning — the agent learns from it.');
+        return;
+      }
+
+      const resultEl = document.getElementById('challengeResult');
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = '<div class="py-text-sm py-text-muted">Evaluating against CxU knowledge...</div>';
+
+      try {
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/training/instruct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, reasoning, force }),
+        });
+        const data = await resp.json();
+
+        if (data.status === 'challenged') {
+          // Agent disagrees — show challenge
+          const ch = data.challenge;
+          const cxuPills = ch.conflictingCxus.map(c =>
+            typeof CxuPill !== 'undefined'
+              ? CxuPill.render({ cxuId: c.cxu_id, alias: c.alias })
+              : `<span class="py-badge py-badge-cxu py-text-xs">${c.alias}</span>`
+          ).join(' ');
+
+          resultEl.innerHTML = `
+            <div class="challenge-card">
+              <div style="display:flex;align-items:center;gap:var(--py-space-2);margin-bottom:var(--py-space-2);">
+                <span class="py-text-bold" style="color:hsl(var(--py-warning));">Agent Challenge</span>
+                <span class="py-text-xs py-text-muted">Confidence: ${(ch.confidence * 100).toFixed(0)}%</span>
+              </div>
+              <div class="py-text-sm" style="margin-bottom:var(--py-space-2);">${escapeHtml(ch.reasoning)}</div>
+              <div class="py-text-sm py-text-bold" style="margin-bottom:var(--py-space-2);">${escapeHtml(ch.recommendation)}</div>
+              <div style="margin-bottom:var(--py-space-3);">
+                <span class="py-text-xs py-text-muted">Conflicting CxUs:</span> ${cxuPills}
+              </div>
+              <div style="display:flex;gap:var(--py-space-2);">
+                <button class="py-btn py-btn-xs py-btn-outline" onclick="trainInstruct('${action}', true)" style="border-color:hsl(var(--py-warning));color:hsl(var(--py-warning));">Override & Execute</button>
+                <button class="py-btn py-btn-xs py-btn-ghost" onclick="document.getElementById('challengeResult').style.display='none'">Accept & Hold</button>
+              </div>
+            </div>`;
+        } else if (data.status === 'executed') {
+          resultEl.innerHTML = `
+            <div class="py-alert py-alert-success" style="margin-top:var(--py-space-3);">
+              <div class="py-alert-title">Trade Executed</div>
+              <div class="py-alert-body">
+                ${data.action.toUpperCase()} at $${Number(data.price).toFixed(2)}<br>
+                Learning CxU created: <strong>${data.learningCxu.alias}</strong>
+              </div>
+            </div>`;
+          document.getElementById('trainingReasoning').value = '';
+          // Reload CxUs
+          setTimeout(loadCxUs, 1000);
+        } else {
+          resultEl.innerHTML = `<div class="py-alert py-alert-error"><div class="py-alert-body">${escapeHtml(data.error || 'Unknown error')}</div></div>`;
+        }
+      } catch (e) {
+        resultEl.innerHTML = `<div class="py-alert py-alert-error"><div class="py-alert-body">Could not send instruction: ${e.message}</div></div>`;
+      }
     }
 
     // ─── Actions ────────────────────────────────────────────────────
