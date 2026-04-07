@@ -1,0 +1,68 @@
+# AgDel Trader Bot — Runtime Configuration
+# Strategy policy lives in CxUs, not here.
+# This file is for infrastructure parameters only.
+
+trading:
+  enable: true
+  assets: [ETH]
+  paperStartingBalanceUsd: 5000
+  loopIntervalMs: 5000
+
+# Risk management (hard safety net, runs every tick)
+autoTrade:
+  enabled: true
+  stopLoss:
+    mode: trailing
+    trailingPct: 0.03
+    fixedPct: 0.06
+  takeProfit:
+    fixedPct: 0.08
+    trailingPct: 0.04
+
+# Agent pipeline
+agentPipeline:
+  model: claude-sonnet-4-6
+  fallbackModels:
+    - gpt-4o
+  temperature: 0.05
+  minDecisionIntervalMs: 120000  # 2 minutes between full pipeline runs
+  maxTokens: 1000
+
+# Reflection (CxU evolution)
+reflection:
+  enabled: true
+  intervalSeconds: 1800  # 30 minutes
+  minTradesForReflection: 3
+  minSignalsForReflection: 5
+
+# Signal feed (direct from signal bot)
+signalFeed:
+  enabled: true
+  baseUrl: http://localhost:9502
+  pollIntervalSeconds: 10
+
+# AGDEL marketplace (purchased signals)
+agdel:
+  enabled: true
+  autoBuy: false
+  budget:
+    maxCostPerSignalUsdc: 2.0
+    maxHourlySpendUsdc: 50.0
+    maxDailySpendUsdc: 250.0
+  selection:
+    targetHorizons:
+      5m: 6
+      15m: 8
+  makerFilters:
+    minWinRate: 0.1
+    blockedSignalTypes:
+      - basis
+      - bb-reversal
+
+# Sentiment gating
+sentimentBias:
+  enabled: true
+
+# Bounce trigger
+bounceTrigger:
+  enabled: false
