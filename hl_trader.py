@@ -349,6 +349,61 @@ class HLTrader:
             logger.debug("Spot USDC check failed: %s", e)
         return 0.0
 
+    async def execute_notional(self, action: str, notional_usd: float, mark_price: float) -> TradeResult | None:
+        """Execute with a specific USD notional (for training mode — bypasses risk formula).
+        For close actions, notional_usd is ignored."""
+        if action == "hold":
+            return None
+        if action == "close":
+            return await self.execute(action, 100, mark_price)
+
+        size = round(notional_usd / mark_price, self._sz_decimals) if mark_price > 0 else 0
+        fee = notional_usd * TAKER_FEE_PCT
+
+        if self.mode == "paper":
+            pos = self._paper_position
+            pnl = 0.0
+            if pos and pos.size != 0:
+                pnl = pos.unrealized_pnl
+                self._paper_balance += pnl - fee
+
+            direction = 1 if action in ("open_long", "flip_long") else -1
+            self._paper_position = Position(
+                size=size * direction, entry_price=mark_price,
+                leverage=self.max_leverage, paper=True,
+            )
+            result = TradeResult(
+                success=True, action=action, size=size,
+                price=mark_price, fee=fee, pnl=pnl, mode="paper",
+            )
+            self._paper_trades.append(result.to_dict())
+            logger.info("Paper trade (notional): %s size=%.4f notional=$%.2f price=%.2f",
+                         action, size, notional_usd, mark_price)
+            return result
+        else:
+            # Live mode — use SDK directly with computed size
+            if not self._exchange:
+                return TradeResult(success=False, action=action, size=0,
+                                   price=mark_price, error="Exchange not initialized", mode="live")
+            if notional_usd < MIN_ORDER_VALUE_USD:
+                return TradeResult(success=False, action=action, size=0,
+                                   price=mark_price, error=f"Notional ${notional_usd:.2f} below minimum ${MIN_ORDER_VALUE_USD:.0f}", mode="live")
+            try:
+                is_buy = action in ("open_long", "flip_long")
+                if action in ("flip_long", "flip_short"):
+                    self._exchange.market_close(self.asset)
+                result = self._exchange.market_open(self.asset, is_buy, size)
+                if isinstance(result, dict) and result.get("status") == "ok":
+                    return TradeResult(success=True, action=action, size=size,
+                                       price=mark_price, fee=fee, pnl=0, mode="live")
+                else:
+                    err = str(result)[:200] if result else "SDK returned None"
+                    return TradeResult(success=False, action=action, size=size,
+                                       price=mark_price, error=err, mode="live")
+            except Exception as e:
+                return TradeResult(success=False, action=action, size=size,
+                                   price=mark_price, error=str(e), mode="live")
+
     async def execute(self, action: str, size_pct: float, mark_price: float) -> TradeResult | None:
         """Execute a trade action. Returns None if action is hold."""
         if action == "hold":

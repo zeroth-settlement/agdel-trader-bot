@@ -1,0 +1,78 @@
+{
+  "alias": "training-observe-flat-ranging-20260407-1443",
+  "cxu_id": "122068f93fdc5c5a0490164a1b013ecc892749be1390554dfd5d6c5c36abc1d34056",
+  "cxu_object": {
+    "claim": "In a ranging regime at price $2071.55 with Bollinger at 49 percent and trend at -0.164 percent the human trader instructed observe-flat because I opened this trade because there was a sudden drop and a large spike in volume.  the high volume helped push the price down to where I hit the strike.  I added a take profit at $250 just so that i didn't miss the top, but the better way to do this would have been with a trailing stop loss once I am above my baseline plus fees.  once the momentum dies down it's hart to tell which way this will go, but I am inclined to be bullish - so I will hold through the chop.",
+    "supporting_contexts": [
+      {
+        "text": "Manual training instruction at 2026-04-07T14:43:12.745107+00:00. Market: ranging regime, $2071.55, BB=49%, trend=-0.164%, consensus=0% NEUTRAL. Conditions observed: Position: FLAT, Price: $2071.55.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "observation",
+      "keywords": [
+        "observe-flat",
+        "ranging",
+        "training",
+        "manual",
+        "position:",
+        "flat,",
+        "price:",
+        "$2071.55"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    },
+    "parameters": {
+      "regime": {
+        "value": "ranging",
+        "description": "Regime when instruction was given"
+      },
+      "action": {
+        "value": "observe-flat",
+        "description": "Instructed action"
+      },
+      "bollingerPosition": {
+        "value": 49.0,
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "description": "BB position at time of instruction"
+      },
+      "trendPct": {
+        "value": -0.1638,
+        "min": -5,
+        "max": 5,
+        "step": 0.01,
+        "description": "Trend % at time of instruction"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T14:43:12.745405+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

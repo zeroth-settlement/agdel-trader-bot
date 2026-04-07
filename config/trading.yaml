@@ -10,7 +10,7 @@ trading:
 
 # Risk management (hard safety net, runs every tick)
 autoTrade:
-  enabled: true
+  enabled: false
   stopLoss:
     mode: trailing
     trailingPct: 0.03
@@ -35,10 +35,12 @@ reflection:
   minTradesForReflection: 3
   minSignalsForReflection: 5
 
-# Signal feed (direct from signal bot)
+# Signal feed (direct from signal bot on Coolify)
+# Can be overridden by SIGNAL_FEED_URL and SIGNAL_FEED_AUTH env vars
 signalFeed:
   enabled: true
-  baseUrl: http://localhost:9502
+  baseUrl: https://agdel-signal-bots.demo.pyrana.ai
+  auth: pyrana:pyrana
   pollIntervalSeconds: 10
 
 # AGDEL marketplace (purchased signals)

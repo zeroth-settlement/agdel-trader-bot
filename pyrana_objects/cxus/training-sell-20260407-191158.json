@@ -1,0 +1,45 @@
+{
+  "alias": "training-sell-20260407-191158",
+  "cxu_id": "12202fdd3b1d290ee76009c75b646e627aaafa1a8230fc31da933442fa140010e993",
+  "cxu_object": {
+    "claim": "Human trader executed sell at $2,087.35 in ranging regime. Reasoning: looks like a spike is forming.  lets open a short",
+    "supporting_contexts": [
+      {
+        "text": "Manual sell at 2026-04-07T19:11:58.461206+00:00. Price: $2,087.35, regime: ranging, BB: 70%, trend: -0.3441%, signal consensus: 0% NEUTRAL. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T19:11:58.465234+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

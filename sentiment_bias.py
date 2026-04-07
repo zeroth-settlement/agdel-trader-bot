@@ -9,12 +9,19 @@ is bullish, bearish, or neutral. This is a GATE, not a signal:
 This runs as CODE, not a prompt instruction, because the LLM ignores
 prompt-level restrictions. The gate prevents wrong-direction trades
 from ever reaching Hyperliquid.
+
+LLM analysis layer: periodically feeds quantitative data + news headlines
+to Claude for a synthesized macro narrative with score, risks, and holding rec.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import re
 import time
+from xml.etree import ElementTree
 
 import httpx
 
@@ -36,6 +43,16 @@ CACHE_SECONDS = 300    # recompute every 5 minutes
 HL_API = "https://api.hyperliquid.xyz"
 YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 FNG_URL = "https://api.alternative.me/fng/?limit=1"
+
+# RSS feeds for news headlines
+NEWS_FEEDS = [
+    ("https://www.coindesk.com/arc/outboundfeeds/rss/", "CoinDesk"),
+    ("https://cointelegraph.com/rss", "CoinTelegraph"),
+    ("https://feeds.feedburner.com/zerohedge/feed", "ZeroHedge"),
+    ("https://www.rss.app/feeds/v1.1/tsBYgEnFqxDgHZG3.json", "CryptoNews"),
+]
+LLM_CACHE_SECONDS = 900  # 15 minutes between LLM calls
+LLM_MODEL = "claude-sonnet-4-6"
 
 # Macro indicators and their bullish/bearish interpretation
 MACRO_INDICATORS = [
@@ -245,4 +262,186 @@ class SentimentBias:
             "details": self._details,
             "macro": getattr(self, '_macro', None),
             "lastComputed": self._last_computed,
+            "llmAnalysis": getattr(self, '_llm_analysis', None),
         }
+
+    # ─── LLM-powered macro analysis ─────────────────────────────────
+
+    async def analyze_with_llm(self) -> dict | None:
+        """Use Claude to synthesize a macro sentiment narrative from
+        quantitative indicators + recent news headlines."""
+        now = time.time()
+        cached = getattr(self, '_llm_analysis', None)
+        if cached and now - cached.get("timestamp", 0) < LLM_CACHE_SECONDS:
+            return cached
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            logger.warning("No ANTHROPIC_API_KEY — skipping LLM macro analysis")
+            return None
+
+        # 1. Ensure quantitative data is fresh
+        await self.compute()
+
+        # 2. Fetch news headlines
+        headlines = await self._fetch_headlines()
+
+        # 3. Build the prompt
+        quant_summary = self._build_quant_summary()
+        headline_text = "\n".join(f"- [{h['source']}] {h['title']}" for h in headlines[:25])
+        if not headline_text:
+            headline_text = "(No recent headlines available)"
+
+        system = """You are a macro analyst for a crypto trading desk that trades ETH perpetuals on Hyperliquid. Your job is to synthesize quantitative market data and recent news into an actionable macro sentiment assessment.
+
+You are advising a trader who holds positions for minutes to hours — not days. They need to know:
+1. Is the macro environment supportive of holding risk (crypto longs) or defensive?
+2. Are there imminent catalysts or risks that could cause sharp moves?
+3. Should they be more aggressive (wider stops, let winners run) or defensive (tight stops, quick exits)?
+
+Be specific and direct. No hedging or "it depends" — give a clear read."""
+
+        user = f"""## Current Quantitative Indicators
+{quant_summary}
+
+## Recent Headlines
+{headline_text}
+
+## Current Date/Time
+{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}
+
+Respond with JSON:
+{{
+  "score": <integer -100 to +100, where -100 = max bearish, +100 = max bullish>,
+  "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
+  "confidence": <0.0-1.0 how confident you are in this read>,
+  "narrative": "<2-3 sentence summary of the macro picture>",
+  "keyFactors": ["<factor 1>", "<factor 2>", "<factor 3>"],
+  "risks": ["<risk 1>", "<risk 2>"],
+  "holdingRec": "<1 sentence: how this should affect holding ETH positions right now>",
+  "divergences": "<any notable divergences between indicators, or null>"
+}}"""
+
+        try:
+            async with httpx.AsyncClient(timeout=45) as client:
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": LLM_MODEL,
+                        "max_tokens": 600,
+                        "temperature": 0.1,
+                        "system": system,
+                        "messages": [{"role": "user", "content": user}],
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                text = data.get("content", [{}])[0].get("text", "")
+
+                # Parse JSON from response
+                parsed = self._parse_json(text)
+                if parsed:
+                    parsed["timestamp"] = now
+                    parsed["headlineCount"] = len(headlines)
+                    self._llm_analysis = parsed
+                    logger.info("LLM macro analysis: score=%s bias=%s confidence=%.0f%%",
+                                parsed.get("score"), parsed.get("bias"), (parsed.get("confidence", 0)) * 100)
+                    return parsed
+
+        except Exception as e:
+            logger.warning("LLM macro analysis failed: %s", e)
+
+        return None
+
+    async def _fetch_headlines(self) -> list[dict]:
+        """Fetch recent headlines from RSS feeds."""
+        headlines = []
+        for url, source in NEWS_FEEDS:
+            try:
+                resp = await self._http.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=8)
+                if not resp.is_success:
+                    continue
+                content_type = resp.headers.get("content-type", "")
+
+                if "json" in content_type or url.endswith(".json"):
+                    # JSON feed
+                    data = resp.json()
+                    for item in (data.get("items") or data.get("entries") or [])[:8]:
+                        title = item.get("title", "")
+                        if title:
+                            headlines.append({"source": source, "title": title[:150]})
+                else:
+                    # XML/RSS feed
+                    root = ElementTree.fromstring(resp.text)
+                    # Handle both RSS and Atom
+                    ns = {"atom": "http://www.w3.org/2005/Atom"}
+                    items = root.findall(".//item") or root.findall(".//atom:entry", ns)
+                    for item in items[:8]:
+                        title_el = item.find("title") or item.find("atom:title", ns)
+                        if title_el is not None and title_el.text:
+                            headlines.append({"source": source, "title": title_el.text.strip()[:150]})
+            except Exception as e:
+                logger.debug("RSS fetch failed for %s: %s", source, e)
+        return headlines
+
+    def _build_quant_summary(self) -> str:
+        """Build a text summary of all quantitative indicators for the LLM."""
+        lines = []
+
+        # Crypto breadth
+        d = self._details
+        if d:
+            lines.append(f"Crypto breadth: {d.get('bullish_count', '?')}/{d.get('total', '?')} assets up over 4h (ratio: {self._ratio:.0%})")
+            lines.append(f"Crypto bias: {self._bias}")
+            returns = d.get("returns", {})
+            if returns:
+                top_movers = sorted(returns.items(), key=lambda x: abs(x[1]), reverse=True)[:5]
+                lines.append("Top movers: " + ", ".join(f"{k} {v:+.2f}%" for k, v in top_movers))
+
+        # Macro indicators
+        macro = getattr(self, '_macro', {}) or {}
+        indicators = macro.get("indicators", {})
+        for name, data in indicators.items():
+            lines.append(f"{name}: ${data.get('price', '?'):,} ({data.get('change_pct', 0):+.1f}% today)")
+
+        # Fear & Greed
+        fg = macro.get("fear_greed")
+        if fg:
+            lines.append(f"Crypto Fear & Greed Index: {fg['value']} ({fg['label']})")
+
+        lines.append(f"Macro bias (algorithmic): {macro.get('macro_bias', 'UNKNOWN')}")
+
+        return "\n".join(lines) if lines else "No quantitative data available yet."
+
+    @staticmethod
+    def _parse_json(text: str) -> dict | None:
+        text = text.strip()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        # Try markdown code block
+        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+        # Try finding first JSON object
+        start = text.find("{")
+        if start >= 0:
+            depth = 0
+            for i in range(start, len(text)):
+                if text[i] == "{": depth += 1
+                elif text[i] == "}": depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[start:i+1])
+                    except json.JSONDecodeError:
+                        break
+        return None

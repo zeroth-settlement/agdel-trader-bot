@@ -345,6 +345,71 @@
 
     /* Agent output panels */
     .agent-output-grid { display: grid; grid-template-columns: 1fr; gap: var(--py-space-4); }
+
+    /* Exchange comparison panel */
+    .exchange-panel {
+      background: hsl(var(--py-card)); border: 1px solid hsl(var(--py-border));
+      border-radius: var(--py-radius); padding: var(--py-space-3) var(--py-space-4);
+      margin-bottom: var(--py-space-4);
+    }
+    .exchange-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--py-space-2); margin-top: var(--py-space-2);
+    }
+    .exchange-card {
+      padding: var(--py-space-2); background: hsl(var(--py-bg-subtle));
+      border-radius: var(--py-radius-sm); font-family: var(--py-font-mono); font-size: 0.8rem;
+      border-left: 3px solid hsl(var(--py-border));
+    }
+    .exchange-card.leader { border-left-color: hsl(var(--py-warning)); }
+    .exchange-card.connected { border-left-color: hsl(var(--py-success)); }
+    .exchange-card .ex-name { font-size: 0.65rem; text-transform: uppercase; color: hsl(var(--py-fg-muted)); letter-spacing: 0.05em; }
+    .exchange-card .ex-price { font-size: 1rem; font-weight: 700; }
+    .exchange-card .ex-delta { font-size: 0.75rem; }
+    .basis-signal {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: var(--py-radius-full);
+      font-size: 0.75rem; font-weight: 600; font-family: var(--py-font-mono);
+    }
+    .basis-up { background: hsl(var(--py-success) / 0.15); color: hsl(var(--py-success)); }
+    .basis-down { background: hsl(var(--py-error) / 0.15); color: hsl(var(--py-error)); }
+    .basis-flat { background: hsl(var(--py-fg-muted) / 0.15); color: hsl(var(--py-fg-muted)); }
+
+    /* Macro sentiment panel */
+    .macro-panel {
+      background: hsl(var(--py-card)); border: 1px solid hsl(var(--py-border));
+      border-radius: var(--py-radius); padding: var(--py-space-3) var(--py-space-4);
+      margin-bottom: var(--py-space-4);
+    }
+    .macro-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--py-space-2); }
+    .macro-bias-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 10px; border-radius: var(--py-radius-full);
+      font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+    }
+    .macro-bullish { background: hsl(var(--py-success) / 0.2); color: hsl(var(--py-success)); }
+    .macro-bearish { background: hsl(var(--py-error) / 0.2); color: hsl(var(--py-error)); }
+    .macro-neutral { background: hsl(var(--py-fg-muted) / 0.2); color: hsl(var(--py-fg-muted)); }
+    .macro-indicators {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: var(--py-space-2);
+    }
+    .macro-indicator {
+      display: flex; flex-direction: column; gap: 1px;
+      padding: var(--py-space-2); background: hsl(var(--py-bg-subtle));
+      border-radius: var(--py-radius-sm); font-family: var(--py-font-mono); font-size: 0.8rem;
+    }
+    .macro-indicator-label { font-size: 0.65rem; text-transform: uppercase; color: hsl(var(--py-fg-muted)); letter-spacing: 0.05em; }
+    .macro-indicator-value { font-weight: 600; }
+    .macro-gauge {
+      width: 100%; height: 6px; background: hsl(var(--py-border)); border-radius: 3px;
+      margin-top: var(--py-space-2); position: relative; overflow: hidden;
+    }
+    .macro-gauge-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+    .macro-gauge-marker {
+      position: absolute; top: -2px; width: 2px; height: 10px;
+      background: hsl(var(--py-fg)); border-radius: 1px; transform: translateX(-50%);
+    }
   </style>
 </head>
 <body>
@@ -396,6 +461,10 @@
       <span class="py-text-xs py-text-muted">Equity</span>
       <span id="accountEquity" class="py-text-bold py-text-sm">--</span>
     </div>
+    <div>
+      <span class="py-text-xs py-text-muted">Macro</span>
+      <span class="macro-bias-badge macro-neutral" id="macroStripBadge">--</span>
+    </div>
   </div>
 
   <!-- Tab Navigation -->
@@ -438,24 +507,81 @@
       </div>
     </div>
 
+    <!-- Macro Sentiment Panel -->
+    <div class="macro-panel" id="macroPanel">
+      <div class="macro-header">
+        <div style="display:flex;align-items:center;gap:var(--py-space-3);">
+          <span class="py-text-sm py-text-bold">Macro Sentiment</span>
+          <span class="macro-bias-badge macro-neutral" id="macroBias">LOADING</span>
+          <span class="py-text-xs py-text-muted" id="macroHoldingAdj"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--py-space-2);">
+          <span class="py-text-xs py-text-muted" id="macroLastUpdate">--</span>
+          <button class="py-btn py-btn-xs py-btn-ghost" onclick="refreshMacro()">Refresh</button>
+        </div>
+      </div>
+      <!-- Gauge: bearish ← → bullish -->
+      <div class="macro-gauge" id="macroGauge">
+        <div class="macro-gauge-fill" id="macroGaugeFill" style="width:50%;background:hsl(var(--py-fg-muted));"></div>
+        <div class="macro-gauge-marker" id="macroGaugeMarker" style="left:50%;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:2px;">
+        <span class="py-text-xs" style="color:hsl(var(--py-error));">Bearish</span>
+        <span class="py-text-xs" style="color:hsl(var(--py-success));">Bullish</span>
+      </div>
+      <div class="macro-indicators" id="macroIndicators" style="margin-top:var(--py-space-2);">
+        <div class="macro-indicator"><span class="macro-indicator-label">Loading...</span></div>
+      </div>
+    </div>
+
+    <!-- Exchange Price Comparison -->
+    <div class="exchange-panel" id="exchangePanel">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:var(--py-space-3);">
+          <span class="py-text-sm py-text-bold">Cross-Exchange ETH</span>
+          <span class="basis-signal basis-flat" id="basisSignal">--</span>
+        </div>
+        <span class="py-text-xs py-text-muted" id="basisLabel">Basis: --</span>
+      </div>
+      <div class="exchange-grid" id="exchangeGrid">
+        <div class="py-text-xs py-text-muted">Connecting to exchanges...</div>
+      </div>
+      <div style="margin-top:var(--py-space-2);">
+        <span class="py-text-xs py-text-muted">Basis Spread (Binance Perps − Hyperliquid)</span>
+        <canvas id="basisCanvas" style="width:100%;height:60px;margin-top:4px;"></canvas>
+      </div>
+    </div>
+
     <!-- Training Panel -->
     <div class="training-panel" id="trainingPanel">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
           <span class="py-text-bold" style="color:hsl(var(--py-warning));">Training Mode</span>
-          <span class="py-text-xs py-text-muted" style="margin-left:var(--py-space-2);">Tell the agent when to trade and why — it learns from you</span>
+          <span class="py-text-xs py-text-muted" style="margin-left:var(--py-space-2);">You trade, agent learns. SL/TP auto-set from active playbook.</span>
+        </div>
+        <span class="py-text-xs py-text-muted" id="trainingModeBadge"></span>
+      </div>
+      <div style="display:flex;gap:var(--py-space-3);margin-top:var(--py-space-3);align-items:stretch;">
+        <textarea id="trainingReasoning" style="flex:1;background:hsl(var(--py-bg));border:1px solid hsl(var(--py-border));border-radius:var(--py-radius-sm);padding:var(--py-space-2);color:hsl(var(--py-fg));font-family:var(--py-font-sans);font-size:0.85rem;resize:vertical;min-height:44px;" placeholder="Why are you making this trade? (e.g., 'Bounce off support at BB lower band')"></textarea>
+        <div style="display:flex;flex-direction:column;gap:var(--py-space-1);min-width:90px;">
+          <label class="py-text-xs py-text-muted">% of Available</label>
+          <select id="trainingSizePct" style="background:hsl(var(--py-bg));border:1px solid hsl(var(--py-border));border-radius:var(--py-radius-sm);padding:4px 8px;color:hsl(var(--py-fg));font-family:var(--py-font-mono);font-size:0.85rem;flex:1;">
+            <option value="10">10%</option>
+            <option value="25">25%</option>
+            <option value="50">50%</option>
+            <option value="75" selected>75%</option>
+            <option value="100">100%</option>
+          </select>
         </div>
       </div>
-      <div class="training-input">
-        <textarea id="trainingReasoning" placeholder="Why do you want to trade? What conditions do you see? (e.g., 'Price hitting support at $1950 with declining volume, expecting a bounce')"></textarea>
+      <div style="display:flex;gap:var(--py-space-2);margin-top:var(--py-space-2);align-items:center;">
+        <button class="py-btn py-btn-sm" style="background:hsl(var(--py-success));color:#fff;font-weight:700;padding:6px 20px;" onclick="trainInstruct('buy')">BUY</button>
+        <button class="py-btn py-btn-sm" style="background:hsl(var(--py-error));color:#fff;font-weight:700;padding:6px 20px;" onclick="trainInstruct('sell')">SELL</button>
+        <button class="py-btn py-btn-sm py-btn-outline" style="padding:6px 16px;" onclick="trainInstruct('close')">CLOSE</button>
+        <span style="flex:1;"></span>
+        <button class="py-btn py-btn-xs" style="background:hsl(var(--py-info));color:#fff;" onclick="trainObserve()">Log Observation</button>
       </div>
-      <div class="training-actions">
-        <button class="py-btn py-btn-sm" style="background:hsl(var(--py-info));color:#fff;" onclick="trainObserve()">Log Observation</button>
-        <button class="py-btn py-btn-sm" style="background:hsl(var(--py-success));color:#fff;" onclick="trainInstruct('buy')">Buy (Long)</button>
-        <button class="py-btn py-btn-sm" style="background:hsl(var(--py-error));color:#fff;" onclick="trainInstruct('sell')">Sell (Short)</button>
-        <button class="py-btn py-btn-sm py-btn-outline" onclick="trainInstruct('close')">Close Position</button>
-      </div>
-      <div id="challengeResult" style="display:none;"></div>
+      <div id="trainingResult" style="display:none;margin-top:var(--py-space-2);"></div>
     </div>
 
     <!-- Price Chart (Candlestick + Predictions) -->
@@ -872,7 +998,9 @@
       renderDecision();
       renderPositionCards();
       renderCandlestickChart();
+      renderExchangePrices();
       renderSignals();
+      renderMacroSentiment();
     }
 
     // ─── Market strip ───────────────────────────────────────────────
@@ -1164,17 +1292,21 @@
         ctx.fillText(`$${p.toFixed(2)}`, W - margin.right + 5, y + 3);
       }
 
-      // Time labels along bottom
+      // Time labels along bottom — spaced so they never overlap
       ctx.fillStyle = 'hsl(222 10% 35%)';
       ctx.font = '9px monospace';
       ctx.textAlign = 'center';
-      const labelInterval = Math.max(1, Math.floor(visible.length / 8));
+      const minLabelGap = 70; // minimum pixels between labels
+      const labelInterval = Math.max(1, Math.ceil(minLabelGap / step));
+      let lastLabelX = -minLabelGap;
       visible.forEach((c, i) => {
         if (i % labelInterval !== 0) return;
         const x = margin.left + i * step + candleWidth / 2;
+        if (x - lastLabelX < minLabelGap) return;
         const d = new Date(c.t * 1000);
         const label = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
         ctx.fillText(label, x, H - margin.bottom + 14);
+        lastLabelX = x;
       });
 
       // Bollinger Bands (20-period, 2 std dev)
@@ -1391,6 +1523,323 @@
       if (norm <= 2) return 2 * mag;
       if (norm <= 5) return 5 * mag;
       return 10 * mag;
+    }
+
+    // ─── Exchange price comparison ──────────────────────────────────
+    let basisHistory = [];
+
+    function renderExchangePrices() {
+      // From priceUpdate messages
+      const exchanges = state.exchangePrices?.exchanges || {};
+      const basis = state.exchangePrices?.leaderBasis || {};
+
+      // Also merge real-time data from priceUpdate
+      const rtExchanges = lastPriceUpdateExchanges || {};
+
+      // Build cards — HL first, then others
+      const grid = document.getElementById('exchangeGrid');
+      let cards = '';
+
+      // HL card
+      const hlMid = lastWsPrice || state.markPrice || 0;
+      if (hlMid > 0) {
+        cards += `<div class="exchange-card connected">
+          <div class="ex-name">Hyperliquid <span style="color:hsl(var(--py-primary));">(you)</span></div>
+          <div class="ex-price">$${hlMid.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+          <div class="ex-delta py-text-muted">reference</div>
+        </div>`;
+      }
+
+      // Other exchanges
+      const exOrder = ['binance_perp', 'coinbase', 'okx_perp'];
+      const exNames = {binance_perp: 'Binance Perps', coinbase: 'Coinbase', okx_perp: 'OKX Perps'};
+      for (const exId of exOrder) {
+        const ex = exchanges[exId] || {};
+        const rt = rtExchanges[exId];
+        const mid = rt?.mid || ex.mid || 0;
+        const delta = rt?.delta || ex.deltaVsHl || 0;
+        const deltaPct = rt?.deltaPct || ex.deltaVsHlPct || 0;
+        const connected = rt?.connected ?? ex.connected ?? false;
+        const isLeader = exId === 'binance_perp';
+
+        if (mid <= 0 && !connected) {
+          cards += `<div class="exchange-card">
+            <div class="ex-name">${exNames[exId] || exId}${isLeader ? ' <span style="color:hsl(var(--py-warning));">★</span>' : ''}</div>
+            <div class="ex-price py-text-muted">--</div>
+            <div class="ex-delta py-text-muted">connecting...</div>
+          </div>`;
+          continue;
+        }
+
+        const deltaColor = delta > 0.5 ? 'hsl(var(--py-success))' : delta < -0.5 ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
+        const arrow = delta > 0 ? '▲' : delta < 0 ? '▼' : '◆';
+        cards += `<div class="exchange-card ${isLeader ? 'leader' : ''} ${connected ? 'connected' : ''}">
+          <div class="ex-name">${exNames[exId] || exId}${isLeader ? ' <span style="color:hsl(var(--py-warning));">★ leader</span>' : ''}</div>
+          <div class="ex-price">$${mid.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+          <div class="ex-delta" style="color:${deltaColor};">${arrow} $${Math.abs(delta).toFixed(2)} (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(3)}%)</div>
+        </div>`;
+      }
+
+      grid.innerHTML = cards;
+
+      // Basis signal badge
+      const basisEl = document.getElementById('basisSignal');
+      const basisLabelEl = document.getElementById('basisLabel');
+      const rtBasis = lastPriceUpdateBasis || basis;
+      if (rtBasis && rtBasis.basisPct !== undefined) {
+        const bp = rtBasis.basisPct;
+        const sig = rtBasis.signal || 'neutral';
+        if (sig === 'hl_lagging_up') {
+          basisEl.textContent = '▲ HL lagging up';
+          basisEl.className = 'basis-signal basis-up';
+        } else if (sig === 'hl_lagging_down') {
+          basisEl.textContent = '▼ HL lagging down';
+          basisEl.className = 'basis-signal basis-down';
+        } else {
+          basisEl.textContent = '◆ In sync';
+          basisEl.className = 'basis-signal basis-flat';
+        }
+        basisLabelEl.textContent = `Basis: $${rtBasis.basis?.toFixed(2) || '0'} (${bp >= 0 ? '+' : ''}${bp.toFixed(3)}%)`;
+      }
+
+      // Basis spread mini-chart
+      renderBasisChart();
+    }
+
+    function renderBasisChart() {
+      const canvas = document.getElementById('basisCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = 60 * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = '60px';
+      ctx.scale(dpr, dpr);
+      const W = rect.width, H = 60;
+
+      ctx.fillStyle = 'hsl(222 47% 6%)';
+      ctx.fillRect(0, 0, W, H);
+
+      if (basisHistory.length < 2) {
+        ctx.fillStyle = 'hsl(222 10% 30%)';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Collecting basis data...', W/2, H/2);
+        return;
+      }
+
+      const points = basisHistory.slice(-120);
+      const values = points.map(p => p.basis || 0);
+      const maxAbs = Math.max(0.5, ...values.map(Math.abs));
+      const margin = {left: 2, right: 30, top: 4, bottom: 4};
+      const plotW = W - margin.left - margin.right;
+      const plotH = H - margin.top - margin.bottom;
+
+      // Zero line
+      const zeroY = margin.top + plotH / 2;
+      ctx.strokeStyle = 'hsl(222 10% 20%)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(margin.left, zeroY); ctx.lineTo(W - margin.right, zeroY); ctx.stroke();
+
+      // Basis line
+      ctx.beginPath();
+      points.forEach((p, i) => {
+        const x = margin.left + (i / (points.length - 1)) * plotW;
+        const y = zeroY - (p.basis / maxAbs) * (plotH / 2);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      const lastVal = values[values.length - 1];
+      ctx.strokeStyle = lastVal > 0.2 ? 'hsl(145 60% 50%)' : lastVal < -0.2 ? 'hsl(0 65% 55%)' : 'hsl(220 60% 55%)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Labels
+      ctx.fillStyle = 'hsl(222 10% 40%)';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`+$${maxAbs.toFixed(1)}`, W - margin.right + 3, margin.top + 6);
+      ctx.fillText(`-$${maxAbs.toFixed(1)}`, W - margin.right + 3, H - margin.bottom);
+      ctx.fillText('0', W - margin.right + 3, zeroY + 3);
+    }
+
+    // Track real-time exchange data from priceUpdate messages
+    let lastPriceUpdateExchanges = null;
+    let lastPriceUpdateBasis = null;
+
+    // Hook into price update handler to capture exchange data
+    const _origHandlePriceUpdate = handlePriceUpdate;
+    handlePriceUpdate = function(msg) {
+      if (msg.exchanges) lastPriceUpdateExchanges = msg.exchanges;
+      if (msg.basis) {
+        lastPriceUpdateBasis = msg.basis;
+        // Record basis history
+        if (msg.basis.basis !== undefined) {
+          basisHistory.push({t: msg.timestamp, basis: msg.basis.basis, pct: msg.basis.basisPct});
+          if (basisHistory.length > 500) basisHistory.shift();
+        }
+      }
+      _origHandlePriceUpdate(msg);
+      renderExchangePrices();
+    };
+
+    // ─── Macro sentiment ─────────────────────────────────────────────
+    function renderMacroSentiment() {
+      const macro = state.macroSentiment;
+      if (!macro || !macro.bias) return;
+
+      const cryptoBias = macro.bias;
+      const macroBias = macro.macro?.macro_bias || 'NEUTRAL';
+      const fg = macro.macro?.fear_greed;
+      const indicators = macro.macro?.indicators || {};
+      const cryptoReturns = macro.details?.returns || {};
+      const ratio = macro.ratio || 0.5;
+
+      // Composite: combine crypto ratio + macro signals into -100 to +100
+      let score = (ratio - 0.5) * 200; // crypto: -100 to +100
+      if (macroBias === 'BULLISH') score += 15;
+      if (macroBias === 'BEARISH') score -= 15;
+      if (fg) {
+        score += (fg.value - 50) * 0.3; // fear/greed nudge
+      }
+      score = Math.max(-100, Math.min(100, Math.round(score)));
+
+      // Overall label
+      let overall, badgeClass;
+      if (score > 20) { overall = 'BULLISH'; badgeClass = 'macro-bullish'; }
+      else if (score < -20) { overall = 'BEARISH'; badgeClass = 'macro-bearish'; }
+      else { overall = 'NEUTRAL'; badgeClass = 'macro-neutral'; }
+
+      // Update badges
+      const biasEl = document.getElementById('macroBias');
+      biasEl.textContent = overall;
+      biasEl.className = 'macro-bias-badge ' + badgeClass;
+
+      const stripEl = document.getElementById('macroStripBadge');
+      stripEl.textContent = overall;
+      stripEl.className = 'macro-bias-badge ' + badgeClass;
+
+      // Holding adjustment text
+      const adjEl = document.getElementById('macroHoldingAdj');
+      const pos = state.position || state.hlPosition || {};
+      if (pos.side && pos.side !== 'flat' && pos.side !== 'FLAT') {
+        const side = pos.side.toUpperCase();
+        const aligned = (side === 'LONG' && score > 20) || (side === 'SHORT' && score < -20);
+        const opposed = (side === 'LONG' && score < -20) || (side === 'SHORT' && score > 20);
+        if (aligned) adjEl.innerHTML = '<span style="color:hsl(var(--py-success));">Macro aligned — TP widened, let it run</span>';
+        else if (opposed) adjEl.innerHTML = '<span style="color:hsl(var(--py-error));">Macro opposed — SL tightened, exit faster</span>';
+        else adjEl.textContent = '';
+      } else {
+        adjEl.textContent = '';
+      }
+
+      // Gauge
+      const gaugePos = (score + 100) / 200; // 0 to 1
+      const gaugeColor = score > 20 ? 'hsl(var(--py-success))' : score < -20 ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
+      document.getElementById('macroGaugeFill').style.width = (gaugePos * 100) + '%';
+      document.getElementById('macroGaugeFill').style.background = gaugeColor;
+      document.getElementById('macroGaugeMarker').style.left = (gaugePos * 100) + '%';
+
+      // Last update
+      if (macro.lastComputed) {
+        document.getElementById('macroLastUpdate').textContent = timeAgo(macro.lastComputed * 1000);
+      }
+
+      // Indicators grid
+      const grid = document.getElementById('macroIndicators');
+      let cards = '';
+
+      // Fear & Greed
+      if (fg) {
+        const fgColor = fg.value >= 60 ? 'hsl(var(--py-success))' : fg.value <= 40 ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg))';
+        cards += `<div class="macro-indicator">
+          <span class="macro-indicator-label">Fear & Greed</span>
+          <span class="macro-indicator-value" style="color:${fgColor};">${fg.value} <span style="font-weight:400;font-size:0.7rem;">${fg.label}</span></span>
+        </div>`;
+      }
+
+      // Crypto ratio
+      cards += `<div class="macro-indicator">
+        <span class="macro-indicator-label">Crypto Breadth</span>
+        <span class="macro-indicator-value" style="color:${ratio >= 0.6 ? 'hsl(var(--py-success))' : ratio <= 0.4 ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg))'};">${(ratio * 100).toFixed(0)}% up</span>
+      </div>`;
+
+      // TradFi indicators
+      for (const [name, data] of Object.entries(indicators)) {
+        const chg = data.change_pct || 0;
+        const color = chg > 0.3 ? 'hsl(var(--py-success))' : chg < -0.3 ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg))';
+        const arrow = chg > 0 ? '+' : '';
+        cards += `<div class="macro-indicator">
+          <span class="macro-indicator-label">${escapeHtml(name)}</span>
+          <span class="macro-indicator-value">${data.price?.toLocaleString() || '--'} <span style="color:${color};font-size:0.75rem;">${arrow}${chg.toFixed(1)}%</span></span>
+        </div>`;
+      }
+
+      // Top crypto movers (BTC, SOL)
+      for (const coin of ['BTC', 'SOL', 'HYPE']) {
+        if (cryptoReturns[coin] !== undefined) {
+          const ret = cryptoReturns[coin];
+          const color = ret > 0.5 ? 'hsl(var(--py-success))' : ret < -0.5 ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg))';
+          const arrow = ret > 0 ? '+' : '';
+          cards += `<div class="macro-indicator">
+            <span class="macro-indicator-label">${coin} (4h)</span>
+            <span class="macro-indicator-value" style="color:${color};">${arrow}${ret.toFixed(2)}%</span>
+          </div>`;
+        }
+      }
+
+      grid.innerHTML = cards;
+
+      // LLM analysis narrative
+      const llm = macro.llmAnalysis;
+      let narrativeEl = document.getElementById('macroNarrative');
+      if (!narrativeEl) {
+        narrativeEl = document.createElement('div');
+        narrativeEl.id = 'macroNarrative';
+        document.getElementById('macroPanel').appendChild(narrativeEl);
+      }
+      if (llm && llm.narrative) {
+        const confPct = ((llm.confidence || 0) * 100).toFixed(0);
+        const scoreBadge = llm.score > 20 ? 'macro-bullish' : llm.score < -20 ? 'macro-bearish' : 'macro-neutral';
+        const factors = (llm.keyFactors || []).map(f => `<li>${escapeHtml(f)}</li>`).join('');
+        const risks = (llm.risks || []).map(r => `<li style="color:hsl(var(--py-error));">${escapeHtml(r)}</li>`).join('');
+
+        narrativeEl.innerHTML = `
+          <div style="margin-top:var(--py-space-3);padding-top:var(--py-space-3);border-top:1px solid hsl(var(--py-border));">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-2);">
+              <div style="display:flex;align-items:center;gap:var(--py-space-2);">
+                <span class="py-text-xs py-text-bold" style="text-transform:uppercase;letter-spacing:0.05em;">AI Analysis</span>
+                <span class="macro-bias-badge ${scoreBadge}" style="font-size:0.7rem;">Score: ${llm.score}</span>
+                <span class="py-text-xs py-text-muted">${confPct}% confidence</span>
+              </div>
+              <span class="py-text-xs py-text-muted">${llm.headlineCount || 0} headlines analyzed &middot; ${llm.timestamp ? timeAgo(llm.timestamp * 1000) : '--'}</span>
+            </div>
+            <div class="py-text-sm" style="line-height:1.6;margin-bottom:var(--py-space-2);">${escapeHtml(llm.narrative)}</div>
+            ${llm.holdingRec ? `<div style="background:hsl(var(--py-bg-subtle));border-radius:var(--py-radius-sm);padding:var(--py-space-2);margin-bottom:var(--py-space-2);font-size:0.85rem;"><strong>Holding:</strong> ${escapeHtml(llm.holdingRec)}</div>` : ''}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--py-space-2);font-size:0.8rem;">
+              ${factors ? `<div><span class="py-text-xs py-text-bold py-text-muted">Key Factors</span><ul style="margin:4px 0 0 16px;padding:0;">${factors}</ul></div>` : ''}
+              ${risks ? `<div><span class="py-text-xs py-text-bold py-text-muted">Risks</span><ul style="margin:4px 0 0 16px;padding:0;">${risks}</ul></div>` : ''}
+            </div>
+            ${llm.divergences ? `<div class="py-text-xs" style="margin-top:var(--py-space-2);color:hsl(var(--py-warning));"><strong>Divergence:</strong> ${escapeHtml(llm.divergences)}</div>` : ''}
+          </div>`;
+      } else {
+        narrativeEl.innerHTML = `
+          <div style="margin-top:var(--py-space-3);padding-top:var(--py-space-3);border-top:1px solid hsl(var(--py-border));">
+            <span class="py-text-xs py-text-muted">AI analysis loading — updates every 15 min...</span>
+          </div>`;
+      }
+    }
+
+    async function refreshMacro() {
+      try {
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/macro`);
+        if (resp.ok) {
+          const data = await resp.json();
+          state.macroSentiment = data;
+          renderMacroSentiment();
+        }
+      } catch (e) { console.warn('Macro refresh failed:', e); }
     }
 
     // ─── Signals ────────────────────────────────────────────────────
@@ -1798,7 +2247,7 @@
         return;
       }
 
-      const resultEl = document.getElementById('challengeResult');
+      const resultEl = document.getElementById('trainingResult');
       resultEl.style.display = 'block';
       resultEl.innerHTML = '<div class="py-text-sm py-text-muted">Recording observation...</div>';
 
@@ -1835,67 +2284,62 @@
       }
     }
 
-    async function trainInstruct(action, force = false) {
+    async function trainInstruct(action) {
       const reasoning = document.getElementById('trainingReasoning').value.trim();
-      if (!reasoning) {
-        alert('Please explain your reasoning — the agent learns from it.');
+      if (!reasoning && action !== 'close') {
+        alert('Enter your reasoning — the agent learns from it.');
         return;
       }
 
-      const resultEl = document.getElementById('challengeResult');
+      const resultEl = document.getElementById('trainingResult');
       resultEl.style.display = 'block';
-      resultEl.innerHTML = '<div class="py-text-sm py-text-muted">Evaluating against CxU knowledge...</div>';
+      resultEl.innerHTML = '<div class="py-text-sm py-text-muted" style="font-family:var(--py-font-mono);">Executing...</div>';
 
       try {
         const resp = await fetch(`${CONFIG.tradingServerUrl}/api/training/instruct`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, reasoning, force }),
+          body: JSON.stringify({
+            action,
+            reasoning: reasoning || `Manual ${action}`,
+            sizePct: Number(document.getElementById('trainingSizePct').value),
+          }),
         });
-        const data = await resp.json();
+        const text = await resp.text();
+        let data;
+        try { data = JSON.parse(text); } catch (parseErr) {
+          resultEl.innerHTML = `<div style="color:hsl(var(--py-error));font-size:0.85rem;">Error: ${escapeHtml(text.substring(0, 200))}</div>`;
+          return;
+        }
 
-        if (data.status === 'challenged') {
-          // Agent disagrees — show challenge
-          const ch = data.challenge;
-          const cxuPills = ch.conflictingCxus.map(c =>
-            typeof CxuPill !== 'undefined'
-              ? CxuPill.render({ cxuId: c.cxu_id, alias: c.alias })
-              : `<span class="py-badge py-badge-cxu py-text-xs">${c.alias}</span>`
-          ).join(' ');
+        if (data.status === 'executed') {
+          const modeBadge = data.mode === 'live'
+            ? '<span class="py-badge py-badge-error py-text-xs">LIVE</span>'
+            : '<span class="py-badge py-badge-info py-text-xs">PAPER</span>';
+
+          let slTpHtml = '';
+          if (data.stopLoss?.price || data.takeProfit?.price) {
+            slTpHtml = `<div style="margin-top:4px;font-family:var(--py-font-mono);font-size:0.8rem;">`;
+            if (data.stopLoss?.price) slTpHtml += `<span style="color:hsl(var(--py-error));">SL $${Number(data.stopLoss.price).toFixed(2)}</span> <span class="py-text-muted">(${data.stopLoss.mode} ${data.stopLoss.pct?.toFixed(1) || ''}%)</span> `;
+            if (data.takeProfit?.price) slTpHtml += `<span style="color:hsl(var(--py-success));">TP $${Number(data.takeProfit.price).toFixed(2)}</span> <span class="py-text-muted">(${data.takeProfit.pct?.toFixed(1) || ''}%)</span>`;
+            if (data.playbook) slTpHtml += ` <span class="py-text-muted">via ${data.playbook}</span>`;
+            slTpHtml += `</div>`;
+          }
 
           resultEl.innerHTML = `
-            <div class="challenge-card">
-              <div style="display:flex;align-items:center;gap:var(--py-space-2);margin-bottom:var(--py-space-2);">
-                <span class="py-text-bold" style="color:hsl(var(--py-warning));">Agent Challenge</span>
-                <span class="py-text-xs py-text-muted">Confidence: ${(ch.confidence * 100).toFixed(0)}%</span>
-              </div>
-              <div class="py-text-sm" style="margin-bottom:var(--py-space-2);">${escapeHtml(ch.reasoning)}</div>
-              <div class="py-text-sm py-text-bold" style="margin-bottom:var(--py-space-2);">${escapeHtml(ch.recommendation)}</div>
-              <div style="margin-bottom:var(--py-space-3);">
-                <span class="py-text-xs py-text-muted">Conflicting CxUs:</span> ${cxuPills}
-              </div>
-              <div style="display:flex;gap:var(--py-space-2);">
-                <button class="py-btn py-btn-xs py-btn-outline" onclick="trainInstruct('${action}', true)" style="border-color:hsl(var(--py-warning));color:hsl(var(--py-warning));">Override & Execute</button>
-                <button class="py-btn py-btn-xs py-btn-ghost" onclick="document.getElementById('challengeResult').style.display='none'">Accept & Hold</button>
-              </div>
-            </div>`;
-        } else if (data.status === 'executed') {
-          resultEl.innerHTML = `
-            <div class="py-alert py-alert-success" style="margin-top:var(--py-space-3);">
-              <div class="py-alert-title">Trade Executed</div>
-              <div class="py-alert-body">
-                ${data.action.toUpperCase()} at $${Number(data.price).toFixed(2)}<br>
-                Learning CxU created: <strong>${data.learningCxu.alias}</strong>
-              </div>
+            <div style="background:hsl(var(--py-success) / 0.1);border:1px solid hsl(var(--py-success) / 0.3);border-radius:var(--py-radius-sm);padding:var(--py-space-2) var(--py-space-3);font-size:0.85rem;">
+              ${modeBadge} <strong>${data.action.toUpperCase()}</strong> ${data.size ? data.size.toFixed(4) + ' ETH' : ''} @ $${Number(data.price).toFixed(2)} <span class="py-text-muted">(${data.sizePct}% of avail)</span>
+              ${slTpHtml}
             </div>`;
           document.getElementById('trainingReasoning').value = '';
-          // Reload CxUs
-          setTimeout(loadCxUs, 1000);
+          // Auto-hide after 8 seconds
+          setTimeout(() => { resultEl.style.display = 'none'; }, 8000);
+          setTimeout(loadCxUs, 2000);
         } else {
-          resultEl.innerHTML = `<div class="py-alert py-alert-error"><div class="py-alert-body">${escapeHtml(data.error || 'Unknown error')}</div></div>`;
+          resultEl.innerHTML = `<div style="color:hsl(var(--py-error));font-size:0.85rem;">${escapeHtml(data.error || 'Unknown error')}</div>`;
         }
       } catch (e) {
-        resultEl.innerHTML = `<div class="py-alert py-alert-error"><div class="py-alert-body">Could not send instruction: ${e.message}</div></div>`;
+        resultEl.innerHTML = `<div style="color:hsl(var(--py-error));font-size:0.85rem;">Failed: ${e.message}</div>`;
       }
     }
 
@@ -1973,6 +2417,9 @@
       // Polling
       setInterval(loadTradeHistory, 10000);
       setInterval(loadReflectionHistory, 30000);
+      // Macro sentiment — initial load + refresh every 5 min
+      refreshMacro();
+      setInterval(refreshMacro, 300000);
     }
 
     init();

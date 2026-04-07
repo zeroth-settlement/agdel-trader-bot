@@ -419,6 +419,42 @@ CxU concerns flagged:
             recommendation=result.get("recommendation", ""),
         )
 
+    def create_training_cxu(
+        self,
+        instruction: TrainingInstruction,
+        mark_price: float,
+        regime: str,
+        indicators: Dict[str, Any],
+        signal_consensus: Dict[str, Any],
+    ) -> CxU:
+        """Create a learning CxU from a manual training instruction."""
+        bb_pos = indicators.get("bollingerPosition", 50)
+        trend = indicators.get("trendPct", 0)
+        consensus_pct = signal_consensus.get("agreementPct", 0)
+        consensus_dir = signal_consensus.get("direction", "NEUTRAL")
+
+        alias = f"training-{instruction.action}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+        claim = (
+            f"Human trader executed {instruction.action} at ${mark_price:,.2f} in {regime} regime. "
+            f"Reasoning: {instruction.reasoning}"
+        )
+        context_text = (
+            f"Manual {instruction.action} at {instruction.timestamp}. "
+            f"Price: ${mark_price:,.2f}, regime: {regime}, BB: {bb_pos:.0f}%, "
+            f"trend: {trend:.4f}%, signal consensus: {consensus_pct:.0f}% {consensus_dir}. "
+            f"Conditions: {instruction.conditions or 'none stated'}."
+        )
+
+        return self.cxu_store.create_cxu(
+            alias=alias,
+            claim=claim,
+            supporting_contexts=[{"text": context_text, "line": None}],
+            knowledge_type="derived",
+            claim_type="hypothesis",
+            tier="learning",
+            created_by="human-trainer",
+        )
+
     def record_pending_outcome(self, trade_id: str, context: dict):
         """Record context for a pending trade so we can update the CxU on close."""
         self._pending_learnings[trade_id] = context

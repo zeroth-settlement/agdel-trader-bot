@@ -1,0 +1,45 @@
+{
+  "alias": "learning-fee-budget-circuit-breaker",
+  "cxu_id": "122082664f25e3dde319f4220fe54d449fcdc9f5171aeea7b67db55dddfd58dc02d8",
+  "cxu_object": {
+    "claim": "When cumulative fees in a single trading session exceed $50 with zero realized P&L, all new entries must be blocked for a minimum of 30 minutes regardless of signal consensus or regime stability. Fee drag of this magnitude indicates a churn loop is active and continuing to trade compounds losses without capturing edge. The circuit breaker resets after the 30-minute cooldown only if the regime has been stable (no transitions) for the entire cooldown period.",
+    "supporting_contexts": [
+      {
+        "text": "Three consecutive sessions have produced $0 P&L with $24-$72 in fees due to churn loops. In this session alone, $72.78 in fees were generated with no winning trades. A session-level fee circuit breaker would have blocked the third trade ($24.18 fee) after the first two trades already consumed $48.60 in fees with no P&L.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "finding",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T15:17:20.582244+00:00",
+    "created_by": "reflector-agent",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by reflector-agent",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

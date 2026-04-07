@@ -39,6 +39,8 @@ from ratchet_tp import RatchetTP
 from sentiment_bias import SentimentBias
 from cluster_tracker import ClusterTracker
 from agdel_buyer import AgdelBuyer
+from exchange_feeds import ExchangeFeeds
+from signal_feed import SignalFeed
 
 # New CxU-driven modules
 from cxu_store import CxUStore
@@ -73,6 +75,7 @@ bounce_trigger: Optional[BounceTrigger] = None
 ratchet_tp: Optional[RatchetTP] = None
 sentiment_bias: Optional[SentimentBias] = None
 cluster_tracker: Optional[ClusterTracker] = None
+exchange_feeds: Optional[ExchangeFeeds] = None
 
 cxu_store: Optional[CxUStore] = None
 regime_classifier: Optional[RegimeClassifier] = None
@@ -83,6 +86,7 @@ trainer: Optional[Trainer] = None
 training_mode: bool = False
 alert_manager: AlertManager = AlertManager()
 agdel_buyer: Optional[AgdelBuyer] = None
+signal_feed: Optional[SignalFeed] = None
 
 trade_history: List[Dict] = []
 tick_history: deque = deque(maxlen=720)
@@ -197,6 +201,10 @@ async def _on_price_tick(price: float):
 
     ts = time.time()
 
+    # Feed HL price to exchange feeds for basis computation
+    if exchange_feeds:
+        exchange_feeds.set_hl_price(price)
+
     # Update all candle stores
     closed_candles = {}
     for tf, store in candle_stores.items():
@@ -224,6 +232,21 @@ async def _on_price_tick(price: float):
         if store.current:
             msg["currentCandles"][tf] = store.current.to_dict()
 
+    # Include exchange prices + basis (lightweight — just current values)
+    if exchange_feeds:
+        ex_prices = {}
+        for ex_id, ep in exchange_feeds.prices.items():
+            if ep.mid > 0:
+                ex_prices[ex_id] = {
+                    "mid": round(ep.mid, 2),
+                    "delta": round(ep.delta_vs_hl, 2),
+                    "deltaPct": round(ep.delta_vs_hl_pct, 4),
+                    "connected": ep.connected,
+                }
+        msg["exchanges"] = ex_prices
+        basis = exchange_feeds._current_basis()
+        msg["basis"] = basis
+
     for ws in ws_clients[:]:
         try:
             await ws.send_json(msg)
@@ -235,9 +258,9 @@ async def _on_price_tick(price: float):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global hl_trader, risk_manager, bounce_trigger, ratchet_tp
-    global sentiment_bias, cluster_tracker
+    global sentiment_bias, cluster_tracker, exchange_feeds
     global cxu_store, regime_classifier, signal_assessor, trade_decider, reflector, trainer
-    global trade_history, agdel_buyer
+    global trade_history, agdel_buyer, signal_feed
 
     logger.info("=" * 50)
     logger.info("  AgDel Trader Bot — Starting")
@@ -251,7 +274,7 @@ async def lifespan(app: FastAPI):
     logger.info("  Loaded %d historical trades", len(trade_history))
 
     # Initialize trading components
-    trading_mode = "paper"  # Always start in paper mode
+    trading_mode = os.environ.get("TRADING_MODE", "paper")  # Set TRADING_MODE=live to start in live mode
     paper_balance = config.get("trading", {}).get("paperStartingBalanceUsd", 5000)
 
     hl_trader = HLTrader(config, mode=trading_mode)
@@ -263,6 +286,7 @@ async def lifespan(app: FastAPI):
     ratchet_tp = RatchetTP()
     sentiment_bias = SentimentBias()
     cluster_tracker = ClusterTracker()
+    exchange_feeds = ExchangeFeeds()
 
     # Initialize CxU store and agents
     cxu_store = CxUStore()
@@ -271,6 +295,13 @@ async def lifespan(app: FastAPI):
     trade_decider = TradeDecider(config, cxu_store)
     reflector = Reflector(config, cxu_store)
     trainer = Trainer(config, cxu_store)
+
+    # Initialize direct signal feed
+    if config.get("signalFeed", {}).get("enabled", False):
+        signal_feed = SignalFeed(config)
+        logger.info("  Signal feed: %s", signal_feed.base_url)
+    else:
+        logger.info("  Signal feed disabled")
 
     # Initialize AGDEL buyer
     if config.get("agdel", {}).get("enabled", True):
@@ -285,10 +316,19 @@ async def lifespan(app: FastAPI):
 
     # Connect to Hyperliquid
     try:
-        await hl_trader.connect()
-        logger.info("  Connected to Hyperliquid")
+        for attempt in range(3):
+            try:
+                await hl_trader.connect()
+                logger.info("  Connected to Hyperliquid")
+                break
+            except Exception as e:
+                if attempt < 2:
+                    logger.warning("  HL connection attempt %d failed: %s (retrying in 3s)", attempt + 1, e)
+                    await asyncio.sleep(3)
+                else:
+                    logger.error("  HL connection failed after 3 attempts: %s", e)
     except Exception as e:
-        logger.warning("  HL connection failed (paper mode ok): %s", e)
+        logger.warning("  HL connection failed: %s", e)
 
     # Start real-time price feed via WebSocket
     try:
@@ -297,15 +337,32 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("  Price feed start failed: %s", e)
 
+    # Start multi-exchange price feeds
+    try:
+        await exchange_feeds.start()
+        logger.info("  Multi-exchange feeds started (Binance, Coinbase, OKX)")
+    except Exception as e:
+        logger.warning("  Exchange feeds start failed: %s", e)
+
     # Start background loops
     tasks = []
     tasks.append(asyncio.create_task(tick_loop()))
 
+    tasks.append(asyncio.create_task(macro_sentiment_loop()))
+
     if config.get("reflection", {}).get("enabled", True):
         tasks.append(asyncio.create_task(reflection_loop()))
 
+    if signal_feed and signal_feed.enabled:
+        tasks.append(asyncio.create_task(signal_feed_loop()))
+        logger.info("  Signal feed loop started (interval=%ds)", signal_feed.poll_interval)
+
     if agdel_buyer and agdel_buyer.enabled:
         tasks.append(asyncio.create_task(agdel_poll_loop()))
+        logger.info("  AGDEL poll loop started (interval=%ds)", agdel_buyer.poll_interval)
+    else:
+        logger.warning("  AGDEL poll loop NOT started (buyer=%s, enabled=%s)",
+                       agdel_buyer is not None, agdel_buyer.enabled if agdel_buyer else "N/A")
 
     logger.info("  Background loops started")
     logger.info("=" * 50)
@@ -510,6 +567,83 @@ def _record_trade(result, rationale: str, mark_price: float, regime: str = "", c
                 trade.get("action"), rationale[:60], regime, len(citations or []))
 
 
+# ─── Macro Sentiment Loop ───────────────────────────────────────
+async def macro_sentiment_loop():
+    """Fetch macro sentiment every 5 minutes, LLM analysis every 15 minutes."""
+    tick_count = 0
+    while True:
+        try:
+            if sentiment_bias:
+                # Quantitative update every tick (5 min)
+                bias = await sentiment_bias.compute()
+                stats = sentiment_bias.get_stats()
+                macro = stats.get("macro") or {}
+
+                # Adjust risk manager holding tolerance based on macro alignment
+                if risk_manager and risk_manager._has_position:
+                    _adjust_holding_tolerance(bias, macro.get("macro_bias", "NEUTRAL"))
+
+                logger.info("Macro sentiment: crypto=%s macro=%s F&G=%s",
+                            bias,
+                            macro.get("macro_bias", "?"),
+                            macro.get("fear_greed", {}).get("value", "?"))
+
+                # LLM analysis every 3rd tick (15 min) — includes news + narrative
+                if tick_count % 3 == 0:
+                    try:
+                        llm_result = await sentiment_bias.analyze_with_llm()
+                        if llm_result:
+                            # Use LLM score to refine holding tolerance
+                            llm_bias = llm_result.get("bias", "NEUTRAL")
+                            if risk_manager and risk_manager._has_position:
+                                _adjust_holding_tolerance(bias, llm_bias)
+                            logger.info("LLM macro: score=%s bias=%s — %s",
+                                        llm_result.get("score"), llm_bias,
+                                        (llm_result.get("narrative") or "")[:100])
+                    except Exception as e:
+                        logger.warning("LLM macro analysis error: %s", e)
+
+                tick_count += 1
+        except Exception as e:
+            logger.warning("Macro sentiment error: %s", e)
+        await asyncio.sleep(300)  # 5 minutes
+
+
+def _adjust_holding_tolerance(crypto_bias: str, macro_bias: str):
+    """Widen TP / tighten SL when macro opposes our position, and vice versa."""
+    if not risk_manager or not risk_manager._has_position:
+        return
+
+    side = risk_manager._side
+    base_sl = config.get("autoTrade", {}).get("stopLoss", {}).get("trailingPct", 0.03)
+    base_tp = config.get("autoTrade", {}).get("takeProfit", {}).get("fixedPct", 0.08)
+
+    # Determine if macro aligns with our position direction
+    aligned = False
+    opposed = False
+    if side == "long":
+        aligned = crypto_bias == "BULLISH" or macro_bias == "BULLISH"
+        opposed = crypto_bias == "BEARISH" and macro_bias != "BULLISH"
+    elif side == "short":
+        aligned = crypto_bias == "BEARISH" or macro_bias == "BEARISH"
+        opposed = crypto_bias == "BULLISH" and macro_bias != "BEARISH"
+
+    if aligned:
+        # Macro supports our trade → wider TP (let it run), standard SL
+        risk_manager.tp_fixed_pct = base_tp * 1.25
+        risk_manager.sl_trailing_pct = base_sl
+        logger.info("Macro ALIGNED with %s → TP widened to %.1f%%", side, risk_manager.tp_fixed_pct * 100)
+    elif opposed:
+        # Macro opposes our trade → tighter SL, standard TP (take profit faster)
+        risk_manager.sl_trailing_pct = base_sl * 0.75
+        risk_manager.tp_fixed_pct = base_tp * 0.8
+        logger.info("Macro OPPOSED to %s → SL tightened to %.1f%%", side, risk_manager.sl_trailing_pct * 100)
+    else:
+        # Neutral — use base config
+        risk_manager.sl_trailing_pct = base_sl
+        risk_manager.tp_fixed_pct = base_tp
+
+
 # ─── Reflection Loop ────────────────────────────────────────────
 async def reflection_loop():
     global latest_reflection
@@ -547,22 +681,45 @@ async def reflection_loop():
             logger.error("Reflection error: %s", e, exc_info=True)
 
 
+# ─── Signal Feed Loop ───────────────────────────────────────────
+async def signal_feed_loop():
+    """Poll the direct signal bot for predictions."""
+    global direct_predictions
+
+    if not signal_feed or not signal_feed.enabled:
+        return
+    interval = signal_feed.poll_interval
+    logger.info("Signal feed loop: starting (url=%s, interval=%ds)", signal_feed.base_url, interval)
+
+    while True:
+        try:
+            got_data = await signal_feed.poll_once()
+            if got_data:
+                direct_predictions = signal_feed.get_active_predictions_for_context()
+                logger.info("Signal feed: %d active predictions", len(direct_predictions))
+        except Exception as e:
+            logger.error("Signal feed poll error: %s", e, exc_info=True)
+        await asyncio.sleep(interval)
+
+
 # ─── AGDEL Poll Loop ────────────────────────────────────────────
 async def agdel_poll_loop():
     """Poll AGDEL marketplace for signals, auto-buy candidates, check deliveries."""
     global purchased_signals, available_signals, agdel_stats
 
     if not agdel_buyer or not agdel_buyer.enabled:
+        logger.warning("AGDEL poll loop: buyer not available, exiting")
         return
     interval = agdel_buyer.poll_interval
+    logger.info("AGDEL poll loop: starting (interval=%ds, autoBuy=%s)", interval, agdel_buyer.auto_buy)
     await asyncio.sleep(5)  # Startup delay
     poll_count = 0
 
     while True:
         try:
+            logger.info("AGDEL poll: starting poll_once...")
             purchased = await agdel_buyer.poll_once()
-            if purchased:
-                logger.info("AGDEL: purchased %d signals", len(purchased))
+            logger.info("AGDEL poll: poll_once returned %d purchased", len(purchased) if purchased else 0)
 
             await agdel_buyer.check_stale_deliveries()
 
@@ -573,13 +730,14 @@ async def agdel_poll_loop():
 
             # Update state for dashboard and signal assessor
             purchased_signals = list(agdel_buyer.purchase_log)
-            if hasattr(agdel_buyer, 'get_available_enriched'):
-                available_signals = agdel_buyer.get_available_enriched()
-            if hasattr(agdel_buyer, 'get_stats'):
-                agdel_stats = agdel_buyer.get_stats()
+            available_signals = agdel_buyer.get_available_enriched()
+            agdel_stats = agdel_buyer.get_stats()
+            logger.info("AGDEL poll: %d available, %d purchased, stats=%s",
+                        len(available_signals), len(purchased_signals),
+                        {k: v for k, v in agdel_stats.items() if k in ('polls', 'autoBuy', 'totalPurchased')})
 
         except Exception as e:
-            logger.error("AGDEL poll error: %s", e)
+            logger.error("AGDEL poll error: %s", e, exc_info=True)
         await asyncio.sleep(interval)
 
 
@@ -649,6 +807,12 @@ async def _broadcast_state(mark_price: float, position: dict):
         # Performance (computed from trade history)
         "performance": _compute_performance(),
 
+        # Macro sentiment
+        "macroSentiment": sentiment_bias.get_stats() if sentiment_bias else {},
+
+        # Multi-exchange prices
+        "exchangePrices": exchange_feeds.get_snapshot() if exchange_feeds else {},
+
         # Agent outputs (for Agent Output tab)
         "agentOutputs": {
             "regime-classifier": latest_regime,
@@ -659,11 +823,13 @@ async def _broadcast_state(mark_price: float, position: dict):
     }
 
     # Broadcast to all clients
-    for ws in ws_clients[:]:
-        try:
-            await ws.send_json(state)
-        except Exception:
-            ws_clients.remove(ws)
+    if ws_clients:
+        for ws in ws_clients[:]:
+            try:
+                await ws.send_json(state)
+            except Exception as e:
+                logger.warning("WS send failed: %s", e)
+                ws_clients.remove(ws)
 
 
 def _get_active_playbook() -> str:
@@ -944,6 +1110,24 @@ async def get_candles(timeframe: str = "1m", limit: int = 200):
     return {"timeframe": timeframe, "candles": store.snapshot(limit)}
 
 
+@app.get("/api/macro")
+async def get_macro():
+    """Return current macro sentiment data."""
+    if not sentiment_bias:
+        return {"error": "Sentiment bias not initialized"}
+    # Trigger a fresh compute if stale
+    await sentiment_bias.compute()
+    return sentiment_bias.get_stats()
+
+
+@app.get("/api/exchanges")
+async def get_exchanges():
+    """Return multi-exchange price data and basis history."""
+    if not exchange_feeds:
+        return {"error": "Exchange feeds not initialized"}
+    return exchange_feeds.get_snapshot()
+
+
 @app.get("/api/predictions")
 async def get_predictions():
     return {"predictions": direct_predictions}
@@ -1127,19 +1311,15 @@ async def training_observe(body: dict):
 
 @app.post("/api/training/instruct")
 async def training_instruct(body: dict):
-    """Submit a manual trading instruction.
+    """Training mode: execute immediately, no challenge. Speed is critical.
 
     Body:
         action: "buy" | "sell" | "close"
-        reasoning: "why you want to do this"
-        conditions: "what conditions you see" (optional)
-        force: true to skip challenge (optional)
-
-    Returns a challenge response if the agent disagrees,
-    or executes the trade and creates a learning CxU if it agrees.
+        reasoning: "why you're making this trade"
+        sizePct: 1-100 (% of available balance to use, default 100)
     """
-    if not trainer or not hl_trader:
-        return JSONResponse({"error": "Trainer not initialized"}, status_code=400)
+    if not hl_trader:
+        return JSONResponse({"error": "Trader not initialized"}, status_code=400)
 
     action = body.get("action", "").lower()
     if action not in ("buy", "sell", "close"):
@@ -1147,90 +1327,115 @@ async def training_instruct(body: dict):
 
     reasoning = body.get("reasoning", "")
     if not reasoning:
-        return JSONResponse({"error": "reasoning is required — tell the agent why"}, status_code=400)
+        return JSONResponse({"error": "reasoning is required"}, status_code=400)
 
-    instruction = TrainingInstruction(
-        action=action,
-        reasoning=reasoning,
-        conditions=body.get("conditions", ""),
-        force=body.get("force", False),
-    )
+    size_pct = body.get("sizePct", 100)
+    try:
+        size_pct = max(1, min(100, float(size_pct)))
+    except (TypeError, ValueError):
+        size_pct = 100
 
-    # Get current market context
+    # ── EXECUTE FAST ──────────────────────────────────────────────
     mark_price = await hl_trader.get_mark_price()
-    position = await hl_trader.get_position()
-    pos_dict = position.to_dict() if position else {}
+    if not mark_price:
+        return JSONResponse({"error": "No price available"}, status_code=500)
 
-    regime = latest_regime.get("data", {}).get("regime", "unknown")
-    indicators = latest_regime.get("data", {}).get("indicators", {})
-    consensus = latest_signal_assessment.get("data", {}).get("consensus", {})
-
-    # Evaluate the instruction against CxUs
-    challenge = await trainer.evaluate_instruction(
-        instruction=instruction,
-        mark_price=mark_price,
-        regime=regime,
-        indicators=indicators,
-        signal_consensus=consensus,
-        position=pos_dict,
-    )
-
-    if not challenge.agrees and not instruction.force:
-        # Return the challenge — user must force-override or accept
-        return {
-            "status": "challenged",
-            "challenge": challenge.to_dict(),
-            "message": "The agent disagrees with your instruction. Use force=true to override.",
-        }
-
-    # Agent agrees (or user forced) — execute the trade
     trade_action = "open_long" if action == "buy" else "open_short" if action == "sell" else "close"
-    result = await hl_trader.execute(trade_action, 100, mark_price)
+
+    if trade_action == "close":
+        result = await hl_trader.execute("close", 100, mark_price)
+    else:
+        # Compute notional from available balance (like HL UI)
+        portfolio = await hl_trader.get_portfolio() or {}
+        available = portfolio.get("availableBalance", 0)
+        leverage = hl_trader.max_leverage
+        notional = available * (size_pct / 100) * leverage
+
+        logger.info("Training execute: %s %.0f%% of $%.2f avail × %dx lev = $%.2f notional",
+                     trade_action, size_pct, available, leverage, notional)
+
+        result = await hl_trader.execute_notional(trade_action, notional, mark_price)
 
     if not result or not result.success:
-        return JSONResponse({"error": "Trade execution failed"}, status_code=500)
+        error_msg = result.error if result else "Execution failed"
+        return JSONResponse({"error": error_msg}, status_code=500)
 
-    # Record the trade
-    _record_trade(
-        result,
-        f"Training: {reasoning}",
-        mark_price,
-        regime=regime,
-        citations=[c for c in challenge.conflicting_cxus],
-    )
+    # ── REGIME + PLAYBOOK SL/TP ───────────────────────────────────
+    regime = latest_regime.get("data", {}).get("regime", "unknown")
+    sl_info = {}
+    tp_info = {}
 
-    # Update risk manager
     if risk_manager and trade_action != "close":
-        new_pos = await hl_trader.get_position()
-        if new_pos and new_pos.side != "FLAT":
-            risk_manager.reset_watermark(new_pos.entry_price or mark_price, new_pos.side)
+        side = "long" if trade_action == "open_long" else "short"
 
-    # Create a learning CxU from this instruction
-    learning_cxu = trainer.create_training_cxu(
-        instruction=instruction,
-        mark_price=mark_price,
-        regime=regime,
-        indicators=indicators,
-        signal_consensus=consensus,
-    )
+        # Look up active playbook for SL/TP parameters
+        playbook = cxu_store.get_playbook_for_regime(regime) if cxu_store else None
+        if playbook:
+            # Regime-specific SL/TP from CxU playbook
+            pb_sl = playbook.param_value("trailingStopPct", None) or playbook.param_value("stopLossPct", None)
+            pb_tp = playbook.param_value("tpFixedPct", None) or playbook.param_value("tpZoneHighPct", None)
 
-    # Record pending outcome for when the trade closes
-    trade_id = f"training-{instruction.timestamp}"
-    trainer.record_pending_outcome(trade_id, {
-        "cxu_alias": learning_cxu.alias,
-        "instruction": instruction.__dict__,
-    })
+            if pb_sl is not None:
+                sl_pct = float(pb_sl) / 100  # playbook stores as %, risk_manager uses fraction
+                risk_manager.sl_mode = "trailing"
+                risk_manager.sl_trailing_pct = sl_pct
+                logger.info("Playbook SL: trailing %.2f%% (from %s)", sl_pct * 100, playbook.alias)
+
+            if pb_tp is not None:
+                tp_pct = float(pb_tp) / 100
+                risk_manager.tp_fixed_pct = tp_pct
+                logger.info("Playbook TP: fixed %.2f%% (from %s)", tp_pct * 100, playbook.alias)
+
+        # Activate risk tracking
+        risk_manager.reset_watermark(mark_price, side)
+        risk_manager.record_trade()
+
+        # Compute the actual SL/TP prices for response
+        levels = risk_manager.get_sl_tp_levels()
+        sl_info = {"price": levels.get("slPrice"), "mode": levels.get("slMode"), "pct": risk_manager.sl_trailing_pct * 100}
+        tp_info = {"price": levels.get("tpPrice"), "pct": risk_manager.tp_fixed_pct * 100}
+    elif risk_manager and trade_action == "close":
+        risk_manager.clear_position()
+
+    # ── RECORD & BROADCAST ────────────────────────────────────────
+    _record_trade(result, f"Training: {reasoning}", mark_price, regime=regime)
+
+    # Create learning CxU (non-blocking — don't slow down the response)
+    indicators = latest_regime.get("data", {}).get("indicators", {})
+    consensus = latest_signal_assessment.get("data", {}).get("consensus", {})
+    learning_alias = ""
+    if trainer:
+        try:
+            instruction = TrainingInstruction(action=action, reasoning=reasoning)
+            learning_cxu = trainer.create_training_cxu(
+                instruction=instruction, mark_price=mark_price, regime=regime,
+                indicators=indicators, signal_consensus=consensus,
+            )
+            learning_alias = learning_cxu.alias
+            trainer.record_pending_outcome(f"training-{instruction.timestamp}", {
+                "cxu_alias": learning_alias, "instruction": instruction.__dict__,
+            })
+        except Exception as e:
+            logger.warning("Failed to create training CxU: %s", e)
+
+    # Broadcast state immediately so position shows on dashboard
+    new_pos = await hl_trader.get_position()
+    new_pos_dict = new_pos.to_dict() if new_pos else {}
+    await _broadcast_state(mark_price, new_pos_dict)
 
     return {
         "status": "executed",
         "action": trade_action,
         "price": mark_price,
-        "challenge": challenge.to_dict(),
-        "learningCxu": {
-            "alias": learning_cxu.alias,
-            "claim": learning_cxu.claim,
-        },
-        "message": f"Trade executed. Learning CxU '{learning_cxu.alias}' created.",
+        "size": result.size,
+        "sizePct": size_pct,
+        "fee": result.fee,
+        "mode": hl_trader.mode,
+        "regime": regime,
+        "stopLoss": sl_info,
+        "takeProfit": tp_info,
+        "playbook": playbook.alias if (trade_action != "close" and cxu_store and cxu_store.get_playbook_for_regime(regime)) else None,
+        "learningCxu": learning_alias,
     }
 
 
