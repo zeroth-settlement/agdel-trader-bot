@@ -1,15 +1,13 @@
 """Trainer — handles manual training mode.
 
-When the user instructs "buy" or "sell", the trainer:
-1. Captures current market context (price, regime, signals, indicators)
-2. Checks if the instruction conflicts with existing CxUs
-3. If conflict → challenges the user with specific CxU-backed reasoning
-4. If no conflict or user confirms → executes the trade
-5. Creates a learning CxU from the instruction + context
-6. Tracks the outcome and updates the learning CxU when the trade closes
+When the user provides an observation or trade instruction, the trainer:
+1. Finds the most relevant existing CxU(s) in the knowledge base
+2. Uses the LLM to decide: update existing CxU (strengthen/weaken) or create new
+3. If updating: adds supporting context, adjusts confidence/parameters
+4. If creating: only when a genuinely new hypothesis has no existing CxU to attach to
+5. Challenges the user when an instruction conflicts with existing CxUs
 
-The training mode is the primary way humans teach the agent. Every manual
-instruction becomes institutional knowledge via CxUs.
+CxUs are living documents — observations strengthen or weaken them over time.
 """
 
 from __future__ import annotations
@@ -25,14 +23,14 @@ logger = logging.getLogger("agents.trainer")
 
 
 class TrainingInstruction:
-    """A manual trading instruction from the user."""
+    """A manual trading instruction or observation from the user."""
 
     def __init__(
         self,
-        action: str,  # "buy", "sell", "close"
-        reasoning: str,  # User's stated reason
-        conditions: Optional[str] = None,  # What conditions the user sees
-        force: bool = False,  # Override agent challenge
+        action: str,  # "buy", "sell", "close", "observe-long", "observe-short", "observe-flat"
+        reasoning: str,
+        conditions: Optional[str] = None,
+        force: bool = False,
     ):
         self.action = action
         self.reasoning = reasoning
@@ -75,7 +73,180 @@ class Trainer(BaseAgent):
     def __init__(self, config: dict, cxu_store: CxUStore):
         super().__init__(config)
         self.cxu_store = cxu_store
-        self._pending_learnings: Dict[str, dict] = {}  # trade_id → context snapshot
+        self._pending_learnings: Dict[str, dict] = {}
+
+    async def process_observation(
+        self,
+        reasoning: str,
+        mark_price: float,
+        regime: str,
+        indicators: Dict[str, Any],
+        signal_consensus: Dict[str, Any],
+        position: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Process a human observation and integrate it into the knowledge base.
+
+        This is the core learning method. It uses the LLM to:
+        1. Find which existing CxU(s) this observation relates to
+        2. Decide whether to update an existing CxU or create a new one
+        3. Execute the change
+
+        Returns a dict with what was done.
+        """
+        # Build context of all current CxUs
+        all_cxus = self.cxu_store.all()
+        cxu_summaries = "\n".join(
+            f"- [{c.tier}] {c.alias}: {c.claim[:120]}..."
+            for c in all_cxus
+        )
+
+        pos_side = position.get("side", "FLAT")
+        bb_pos = indicators.get("bollingerPosition", 50)
+        trend = indicators.get("trendPct", 0)
+        consensus_pct = signal_consensus.get("agreementPct", 0)
+        consensus_dir = signal_consensus.get("direction", "NEUTRAL")
+
+        system = f"""You are a knowledge base curator for a trading agent. The human trader has made an observation. Your job is to integrate this observation into the existing CxU knowledge base.
+
+EXISTING CxUs:
+{cxu_summaries}
+
+RULES:
+1. PREFER updating an existing CxU over creating a new one.
+2. To UPDATE: add the observation as a new supporting context that strengthens or weakens the CxU's claim. You can adjust parameters within their bounds.
+3. To CREATE: only when the observation represents a genuinely new hypothesis that no existing CxU covers. This should be rare.
+4. An observation can relate to multiple CxUs — update the most relevant one.
+5. If the observation contradicts an axiom (tier:axiom), note this but do NOT modify the axiom. Flag it for awareness.
+6. Keep the knowledge base lean — don't create CxUs for one-off observations. Wait for patterns.
+
+Respond with JSON:
+{{
+  "action": "update" | "create" | "note",
+  "targetCxuAlias": "alias of CxU to update (for update action)",
+  "newSupportingContext": "text to add as supporting evidence (for update action)",
+  "parameterUpdates": {{"paramName": newValue}} or null,
+  "changeDescription": "brief description of what changed and why",
+  "newCxuAlias": "alias for new CxU (for create action only)",
+  "newCxuClaim": "claim text (for create action only)",
+  "newCxuTier": "playbook or learning (for create action only)",
+  "reasoning": "why you chose this action over alternatives"
+}}
+
+"note" means the observation is interesting but doesn't warrant a CxU change yet — log it for future reference."""
+
+        user = f"""## Human Observation
+"{reasoning}"
+
+## Market Context at Time of Observation
+- Price: ${mark_price:,.2f}
+- Regime: {regime}
+- Position: {pos_side}
+- Bollinger: {bb_pos:.0f}%
+- Trend: {trend:.4f}%
+- Signal consensus: {consensus_pct:.0f}% {consensus_dir}"""
+
+        result = await self.call_llm(system, user)
+
+        if not result:
+            return {"action": "error", "error": "LLM call failed"}
+
+        result.pop("_metrics", None)
+        action = result.get("action", "note")
+
+        if action == "update":
+            alias = result.get("targetCxuAlias", "")
+            cxu = self.cxu_store.by_alias(alias)
+            if not cxu:
+                return {"action": "error", "error": f"CxU '{alias}' not found"}
+            if cxu.is_human_locked:
+                return {
+                    "action": "flagged",
+                    "reasoning": f"Observation relates to human-locked CxU '{alias}'. Noted but not modified.",
+                    "cxuAlias": alias,
+                }
+
+            # Update the CxU
+            param_updates = result.get("parameterUpdates") or {}
+            updated = self.cxu_store.update_cxu(
+                alias=alias,
+                param_updates=param_updates,
+                change_description=result.get("changeDescription", f"Training observation: {reasoning[:80]}"),
+                modified_by="human-trainer",
+            )
+
+            # Add supporting context by rewriting the CxU with the new context appended
+            new_context = result.get("newSupportingContext", "")
+            if updated and new_context:
+                self._add_supporting_context(updated, new_context, mark_price, regime, indicators)
+
+            logger.info("Training: updated CxU '%s' — %s", alias, result.get("changeDescription", ""))
+            return {
+                "action": "updated",
+                "cxuAlias": alias,
+                "changeDescription": result.get("changeDescription", ""),
+                "reasoning": result.get("reasoning", ""),
+                "cxu": {"alias": alias, "claim": cxu.claim[:150]},
+            }
+
+        elif action == "create":
+            new_alias = result.get("newCxuAlias", "")
+            new_claim = result.get("newCxuClaim", "")
+            new_tier = result.get("newCxuTier", "learning")
+
+            if not new_alias or not new_claim:
+                return {"action": "error", "error": "LLM proposed create but missing alias or claim"}
+
+            context_text = (
+                f"Human observation at {datetime.now(timezone.utc).isoformat()}: {reasoning}. "
+                f"Market context: {regime} regime, ${mark_price:.2f}, BB={bb_pos:.0f}%, "
+                f"trend={trend:.4f}%, position={pos_side}."
+            )
+
+            new_cxu = self.cxu_store.create_cxu(
+                alias=new_alias,
+                claim=new_claim,
+                supporting_contexts=[{"text": context_text, "line": None}],
+                knowledge_type="derived",
+                claim_type="hypothesis",
+                tier=new_tier,
+                created_by="human-trainer",
+            )
+
+            logger.info("Training: created new CxU '%s'", new_alias)
+            return {
+                "action": "created",
+                "cxuAlias": new_alias,
+                "changeDescription": result.get("changeDescription", ""),
+                "reasoning": result.get("reasoning", ""),
+                "cxu": {"alias": new_alias, "claim": new_claim[:150]},
+            }
+
+        else:
+            # "note" — observation logged but no CxU change
+            logger.info("Training: observation noted — %s", result.get("reasoning", ""))
+            return {
+                "action": "noted",
+                "reasoning": result.get("reasoning", "No CxU change warranted yet."),
+            }
+
+    def _add_supporting_context(self, cxu: CxU, context_text: str, mark_price: float, regime: str, indicators: Dict):
+        """Add a supporting context entry to an existing CxU file on disk."""
+        import json
+        filepath = self.cxu_store.cxus_dir / f"{cxu.alias}.json"
+        if not filepath.exists():
+            return
+        with open(filepath) as f:
+            data = json.load(f)
+
+        contexts = data.get("cxu_object", {}).get("supporting_contexts", [])
+        contexts.append({
+            "text": context_text,
+            "line": None,
+        })
+        data["cxu_object"]["supporting_contexts"] = contexts
+
+        with open(filepath, "w") as f:
+            json.dump(data, f, indent=2)
 
     async def evaluate_instruction(
         self,
@@ -86,37 +257,24 @@ class Trainer(BaseAgent):
         signal_consensus: Dict[str, Any],
         position: Dict[str, Any],
     ) -> ChallengeResponse:
-        """Evaluate a manual instruction against existing CxUs.
-
-        Returns a ChallengeResponse. If the agent disagrees, it explains why
-        with specific CxU citations. The user can then force-override or accept.
-        """
+        """Evaluate a manual trade instruction against existing CxUs."""
         conflicts = []
         confidence_to_agree = 1.0
 
-        # Check against axioms
         action = instruction.action.lower()
 
         # Fee check
         fee_cxu = self.cxu_store.by_alias("hyperliquid-fees")
         if fee_cxu and action in ("buy", "sell"):
-            # Can't check exact edge without target, but flag the concern
             conflicts.append({
                 "cxu": fee_cxu.to_citation(),
-                "concern": "Ensure minimum $13 edge available (round-trip fee cost)",
+                "concern": "Ensure expected profit exceeds round-trip fee (2 × 0.045% taker at Tier 0)",
                 "severity": "warning",
             })
-
-        # Hold default check
-        hold_cxu = self.cxu_store.by_alias("axiom-hold-default")
-        if hold_cxu and action in ("buy", "sell"):
-            # Not a hard conflict, just a reminder
-            pass
 
         # Regime-playbook alignment
         playbook = self.cxu_store.get_playbook_for_regime(regime)
         if playbook and action in ("buy", "sell"):
-            # Check consensus threshold
             threshold = playbook.param_value("consensusThresholdPct", 75)
             consensus_pct = signal_consensus.get("agreementPct", 0)
             consensus_dir = signal_consensus.get("direction", "NEUTRAL")
@@ -129,7 +287,6 @@ class Trainer(BaseAgent):
                 })
                 confidence_to_agree -= 0.2
 
-            # Check direction alignment
             if action == "buy" and consensus_dir == "SHORT":
                 conflicts.append({
                     "cxu": playbook.to_citation(),
@@ -144,10 +301,6 @@ class Trainer(BaseAgent):
                     "severity": "caution",
                 })
                 confidence_to_agree -= 0.15
-
-            # Check max trades per day
-            max_trades = playbook.param_value("maxTradesPerDay", 3)
-            # TODO: count today's trades
 
             # Regime-specific checks
             if playbook.alias == "playbook-ranging":
@@ -173,33 +326,22 @@ class Trainer(BaseAgent):
         # Signal interpretation check
         sig_cxu = self.cxu_store.by_alias("agdel-signal-scoring")
         if sig_cxu and action in ("buy", "sell"):
-            requires_agdel = sig_cxu.param_value("highConvictionRequiresAgdel", True)
-            if requires_agdel and "signal" in instruction.reasoning.lower():
+            if "signal" in instruction.reasoning.lower():
                 conflicts.append({
                     "cxu": sig_cxu.to_citation(),
                     "concern": "High conviction entries should be confirmed by AGDEL purchased signals with quality scores. Are you relying on direct feed only?",
                     "severity": "info",
                 })
 
-        # Max size axiom
-        size_cxu = self.cxu_store.by_alias("axiom-max-size-or-skip")
-        if size_cxu and action in ("buy", "sell"):
-            # Just a reminder to use max size
-            pass
-
-        # Use LLM for nuanced challenge if there are concerns
         agrees = confidence_to_agree > 0.6 or len([c for c in conflicts if c["severity"] in ("concern", "caution")]) == 0
-        conflicting_citations = [c["cxu"] for c in conflicts]
 
         if not agrees and not instruction.force:
-            # Build a proper challenge with LLM reasoning
             challenge = await self._build_challenge(
                 instruction, mark_price, regime, indicators, signal_consensus, conflicts
             )
             if challenge:
                 return challenge
 
-        # Build response
         if agrees:
             reasoning = f"Instruction aligns with CxU knowledge. {len(conflicts)} minor notes."
             rec = f"Proceed with {action}."
@@ -212,7 +354,7 @@ class Trainer(BaseAgent):
             agrees=agrees,
             confidence=max(0, confidence_to_agree),
             reasoning=reasoning,
-            conflicting_cxus=conflicting_citations,
+            conflicting_cxus=[c["cxu"] for c in conflicts],
             recommendation=rec,
         )
 
@@ -277,79 +419,6 @@ CxU concerns flagged:
             recommendation=result.get("recommendation", ""),
         )
 
-    def create_training_cxu(
-        self,
-        instruction: TrainingInstruction,
-        mark_price: float,
-        regime: str,
-        indicators: Dict[str, Any],
-        signal_consensus: Dict[str, Any],
-        outcome: Optional[Dict[str, Any]] = None,
-    ) -> CxU:
-        """Create a learning CxU from a manual training instruction.
-
-        This is how the agent learns from human expertise.
-        """
-        action = instruction.action.lower()
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
-        alias = f"training-{action}-{regime}-{ts}"
-
-        # Build claim from instruction context
-        bb_pos = indicators.get("bollingerPosition", 50)
-        trend = indicators.get("trendPct", 0)
-        consensus = signal_consensus.get("agreementPct", 0)
-        consensus_dir = signal_consensus.get("direction", "NEUTRAL")
-
-        claim = (
-            f"In a {regime} regime at price ${mark_price:.2f} with Bollinger at {bb_pos:.0f} percent "
-            f"and trend at {trend:.3f} percent the human trader instructed {action} because "
-            f"{instruction.reasoning}"
-        )
-
-        supporting = [
-            {
-                "text": (
-                    f"Manual training instruction at {instruction.timestamp}. "
-                    f"Market: {regime} regime, ${mark_price:.2f}, BB={bb_pos:.0f}%, "
-                    f"trend={trend:.3f}%, consensus={consensus:.0f}% {consensus_dir}. "
-                    f"Conditions observed: {instruction.conditions or 'not specified'}."
-                ),
-                "line": None,
-            }
-        ]
-
-        if outcome:
-            pnl = outcome.get("pnl", 0)
-            result_text = "profitable" if pnl > 0 else "unprofitable"
-            supporting.append({
-                "text": f"Trade outcome: {result_text}, P&L=${pnl:.2f}, fee=${outcome.get('fee', 0):.2f}",
-                "line": None,
-            })
-
-        keywords = [action, regime, "training", "manual"]
-        if instruction.conditions:
-            keywords.extend(w.lower() for w in instruction.conditions.split()[:5])
-
-        cxu = self.cxu_store.create_cxu(
-            alias=alias,
-            claim=claim,
-            supporting_contexts=supporting,
-            knowledge_type="derived",
-            claim_type="observation",
-            tier="learning",
-            parameters={
-                "regime": {"value": regime, "description": "Regime when instruction was given"},
-                "action": {"value": action, "description": "Instructed action"},
-                "bollingerPosition": {"value": round(bb_pos, 1), "min": 0, "max": 100, "step": 1, "description": "BB position at time of instruction"},
-                "trendPct": {"value": round(trend, 4), "min": -5, "max": 5, "step": 0.01, "description": "Trend % at time of instruction"},
-            },
-            keywords=keywords,
-            created_by="human-trainer",
-        )
-
-        logger.info("Created training CxU: %s", alias)
-        return cxu
-
     def record_pending_outcome(self, trade_id: str, context: dict):
         """Record context for a pending trade so we can update the CxU on close."""
         self._pending_learnings[trade_id] = context
@@ -367,10 +436,9 @@ CxU concerns flagged:
         pnl = outcome.get("pnl", 0)
         fee = outcome.get("fee", 0)
 
-        # Update the CxU with outcome data
         return self.cxu_store.update_cxu(
             alias=alias,
-            param_updates={},  # No param changes, but we update the version
+            param_updates={},
             change_description=f"Outcome: P&L=${pnl:.2f}, fee=${fee:.2f}, {'win' if pnl > 0 else 'loss'}",
             modified_by="outcome-tracker",
         )

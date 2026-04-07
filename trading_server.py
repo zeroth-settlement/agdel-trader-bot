@@ -46,6 +46,7 @@ from agents.signal_assessor import SignalAssessor
 from agents.trade_decider import TradeDecider
 from agents.reflector import Reflector
 from agents.trainer import Trainer, TrainingInstruction
+from alerts import AlertManager
 
 load_dotenv()
 
@@ -79,6 +80,7 @@ trade_decider: Optional[TradeDecider] = None
 reflector: Optional[Reflector] = None
 trainer: Optional[Trainer] = None
 training_mode: bool = False
+alert_manager: AlertManager = AlertManager()
 
 trade_history: List[Dict] = []
 tick_history: deque = deque(maxlen=720)
@@ -232,7 +234,7 @@ async def _on_price_tick(price: float):
 async def lifespan(app: FastAPI):
     global hl_trader, risk_manager, bounce_trigger, ratchet_tp
     global sentiment_bias, cluster_tracker
-    global cxu_store, regime_classifier, signal_assessor, trade_decider, reflector
+    global cxu_store, regime_classifier, signal_assessor, trade_decider, reflector, trainer
     global trade_history
 
     logger.info("=" * 50)
@@ -452,7 +454,20 @@ async def _run_tick():
             "citations": [],
         }
 
-    # 6. Broadcast state
+    # 6. Check alerts
+    if alert_manager.watches:
+        regime = latest_regime.get("data", {}).get("regime", "unknown")
+        indicators = latest_regime.get("data", {}).get("indicators", {})
+        triggered = await alert_manager.check_all(mark_price, indicators, regime, pos_dict)
+        for alert in triggered:
+            # Send alert to dashboard via WebSocket
+            for ws in ws_clients[:]:
+                try:
+                    await ws.send_json({"type": "alert", **alert})
+                except Exception:
+                    pass
+
+    # 7. Broadcast state
     await _broadcast_state(mark_price, pos_dict)
 
 
@@ -877,6 +892,49 @@ async def get_predictions():
     return {"predictions": direct_predictions}
 
 
+# ─── Alert / Watch API ───────────────────────────────────────────
+
+@app.post("/api/alerts/watch")
+async def add_watch(body: dict):
+    """Add a watch condition.
+
+    Body:
+        name: "Bounce Entry Dip"
+        description: "Alert when price dips to lower BB band in ranging regime"
+        conditions: {
+            "bb_below": 20,          # BB position drops below 20%
+            "regime_is": "ranging"    # only in ranging regime
+        }
+        cooldownSeconds: 300         # optional, default 5 min
+    """
+    name = body.get("name", "")
+    description = body.get("description", "")
+    conditions = body.get("conditions", {})
+
+    if not name or not conditions:
+        return JSONResponse({"error": "name and conditions required"}, status_code=400)
+
+    watch = alert_manager.add_watch(
+        name=name,
+        description=description,
+        conditions=conditions,
+        cooldown_seconds=body.get("cooldownSeconds", 300),
+    )
+    return {"status": "created", "watch": watch.to_dict()}
+
+
+@app.get("/api/alerts/watches")
+async def list_watches():
+    return {"watches": alert_manager.list_watches()}
+
+
+@app.delete("/api/alerts/watch/{watch_id}")
+async def remove_watch(watch_id: str):
+    if alert_manager.remove_watch(watch_id):
+        return {"status": "removed"}
+    return JSONResponse({"error": "Watch not found"}, status_code=404)
+
+
 @app.post("/api/agdel/autobuy")
 async def toggle_autobuy():
     agdel_stats["autoBuy"] = not agdel_stats.get("autoBuy", False)
@@ -897,6 +955,70 @@ async def toggle_training():
     training_mode = not training_mode
     logger.info("Training mode: %s", "ON" if training_mode else "OFF")
     return {"trainingMode": training_mode}
+
+
+@app.post("/api/training/observe")
+async def training_observe(body: dict):
+    """Record an observation and integrate it into the knowledge base.
+
+    The LLM decides whether to update an existing CxU (strengthen/weaken it)
+    or create a new one (only for genuinely new hypotheses).
+
+    Body:
+        reasoning: "what you observe and why it matters"
+    """
+    if not trainer or not hl_trader:
+        return JSONResponse({"error": "Trainer not initialized"}, status_code=400)
+
+    reasoning = body.get("reasoning", "")
+    if not reasoning:
+        return JSONResponse({"error": "reasoning is required"}, status_code=400)
+
+    mark_price = await hl_trader.get_mark_price()
+    position = await hl_trader.get_position()
+    pos_dict = position.to_dict() if position else {}
+
+    regime = latest_regime.get("data", {}).get("regime", "unknown")
+    indicators = latest_regime.get("data", {}).get("indicators", {})
+    consensus = latest_signal_assessment.get("data", {}).get("consensus", {})
+
+    result = await trainer.process_observation(
+        reasoning=reasoning,
+        mark_price=mark_price,
+        regime=regime,
+        indicators=indicators,
+        signal_consensus=consensus,
+        position=pos_dict,
+    )
+
+    action = result.get("action", "error")
+
+    if action in ("updated", "created"):
+        # Reload CxU store so changes are visible
+        cxu_store.reload()
+        return {
+            "status": "recorded",
+            "learningCxu": result.get("cxu", {}),
+            "action": action,
+            "changeDescription": result.get("changeDescription", ""),
+            "reasoning": result.get("reasoning", ""),
+        }
+    elif action == "noted":
+        return {
+            "status": "recorded",
+            "learningCxu": {"alias": "n/a", "claim": "Observation noted — no CxU change warranted yet."},
+            "action": "noted",
+            "reasoning": result.get("reasoning", ""),
+        }
+    elif action == "flagged":
+        return {
+            "status": "recorded",
+            "learningCxu": {"alias": result.get("cxuAlias", ""), "claim": "Relates to human-locked CxU — noted but not modified."},
+            "action": "flagged",
+            "reasoning": result.get("reasoning", ""),
+        }
+    else:
+        return JSONResponse({"error": result.get("error", "Unknown error")}, status_code=500)
 
 
 @app.post("/api/training/instruct")

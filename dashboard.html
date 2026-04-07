@@ -450,6 +450,7 @@
         <textarea id="trainingReasoning" placeholder="Why do you want to trade? What conditions do you see? (e.g., 'Price hitting support at $1950 with declining volume, expecting a bounce')"></textarea>
       </div>
       <div class="training-actions">
+        <button class="py-btn py-btn-sm" style="background:hsl(var(--py-info));color:#fff;" onclick="trainObserve()">Log Observation</button>
         <button class="py-btn py-btn-sm" style="background:hsl(var(--py-success));color:#fff;" onclick="trainInstruct('buy')">Buy (Long)</button>
         <button class="py-btn py-btn-sm" style="background:hsl(var(--py-error));color:#fff;" onclick="trainInstruct('sell')">Sell (Short)</button>
         <button class="py-btn py-btn-sm py-btn-outline" onclick="trainInstruct('close')">Close Position</button>
@@ -1176,6 +1177,81 @@
         ctx.fillText(label, x, H - margin.bottom + 14);
       });
 
+      // Bollinger Bands (20-period, 2 std dev)
+      const bbPeriod = 20, bbMult = 2;
+      if (visible.length >= bbPeriod) {
+        const closes = visible.map(c => c.c);
+        const bbUpper = [], bbMiddle = [], bbLower = [];
+        for (let i = 0; i < visible.length; i++) {
+          if (i < bbPeriod - 1) { bbUpper.push(null); bbMiddle.push(null); bbLower.push(null); continue; }
+          let sum = 0;
+          for (let j = i - bbPeriod + 1; j <= i; j++) sum += closes[j];
+          const sma = sum / bbPeriod;
+          let sqSum = 0;
+          for (let j = i - bbPeriod + 1; j <= i; j++) sqSum += (closes[j] - sma) ** 2;
+          const std = Math.sqrt(sqSum / bbPeriod);
+          bbMiddle.push(sma);
+          bbUpper.push(sma + bbMult * std);
+          bbLower.push(sma - bbMult * std);
+        }
+
+        // Filled band area
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < visible.length; i++) {
+          if (bbUpper[i] === null) continue;
+          const x = margin.left + i * step + candleWidth / 2;
+          if (!started) { ctx.moveTo(x, toY(bbUpper[i])); started = true; }
+          else ctx.lineTo(x, toY(bbUpper[i]));
+        }
+        for (let i = visible.length - 1; i >= 0; i--) {
+          if (bbLower[i] === null) continue;
+          const x = margin.left + i * step + candleWidth / 2;
+          ctx.lineTo(x, toY(bbLower[i]));
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'hsla(220, 60%, 50%, 0.07)';
+        ctx.fill();
+
+        // Upper band line
+        ctx.beginPath(); started = false;
+        for (let i = 0; i < visible.length; i++) {
+          if (bbUpper[i] === null) continue;
+          const x = margin.left + i * step + candleWidth / 2;
+          if (!started) { ctx.moveTo(x, toY(bbUpper[i])); started = true; }
+          else ctx.lineTo(x, toY(bbUpper[i]));
+        }
+        ctx.strokeStyle = 'hsla(220, 60%, 55%, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Middle band (SMA)
+        ctx.beginPath(); started = false;
+        for (let i = 0; i < visible.length; i++) {
+          if (bbMiddle[i] === null) continue;
+          const x = margin.left + i * step + candleWidth / 2;
+          if (!started) { ctx.moveTo(x, toY(bbMiddle[i])); started = true; }
+          else ctx.lineTo(x, toY(bbMiddle[i]));
+        }
+        ctx.strokeStyle = 'hsla(220, 60%, 55%, 0.35)';
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Lower band line
+        ctx.beginPath(); started = false;
+        for (let i = 0; i < visible.length; i++) {
+          if (bbLower[i] === null) continue;
+          const x = margin.left + i * step + candleWidth / 2;
+          if (!started) { ctx.moveTo(x, toY(bbLower[i])); started = true; }
+          else ctx.lineTo(x, toY(bbLower[i]));
+        }
+        ctx.strokeStyle = 'hsla(220, 60%, 55%, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
       // Draw candles
       visible.forEach((c, i) => {
         const x = margin.left + i * step;
@@ -1713,6 +1789,50 @@
           btn.style.color = '';
         }
       } catch (e) { console.warn('Could not toggle training'); }
+    }
+
+    async function trainObserve() {
+      const reasoning = document.getElementById('trainingReasoning').value.trim();
+      if (!reasoning) {
+        alert('Please explain what you observe — the agent learns from it.');
+        return;
+      }
+
+      const resultEl = document.getElementById('challengeResult');
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = '<div class="py-text-sm py-text-muted">Recording observation...</div>';
+
+      try {
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/training/observe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reasoning }),
+        });
+        const data = await resp.json();
+
+        if (data.status === 'recorded') {
+          const actionLabel = data.action === 'updated' ? 'CxU Updated'
+            : data.action === 'created' ? 'New CxU Created'
+            : data.action === 'noted' ? 'Observation Noted'
+            : 'Flagged for Review';
+          const alertType = data.action === 'noted' ? 'warning' : 'info';
+          resultEl.innerHTML = `
+            <div class="py-alert py-alert-${alertType}" style="margin-top:var(--py-space-3);">
+              <div class="py-alert-title">${actionLabel}</div>
+              <div class="py-alert-body">
+                ${data.learningCxu?.alias ? `<strong>${data.learningCxu.alias}</strong><br>` : ''}
+                ${data.changeDescription ? `<span class="py-text-sm">${escapeHtml(data.changeDescription)}</span><br>` : ''}
+                <span class="py-text-xs py-text-muted">${escapeHtml(data.reasoning || '')}</span>
+              </div>
+            </div>`;
+          document.getElementById('trainingReasoning').value = '';
+          if (data.action !== 'noted') setTimeout(loadCxUs, 1000);
+        } else {
+          resultEl.innerHTML = `<div class="py-alert py-alert-error"><div class="py-alert-body">${escapeHtml(data.error || 'Unknown error')}</div></div>`;
+        }
+      } catch (e) {
+        resultEl.innerHTML = `<div class="py-alert py-alert-error"><div class="py-alert-body">Could not record: ${e.message}</div></div>`;
+      }
     }
 
     async function trainInstruct(action, force = false) {
