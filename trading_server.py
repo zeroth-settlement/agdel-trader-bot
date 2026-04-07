@@ -38,6 +38,7 @@ from bounce_trigger import BounceTrigger
 from ratchet_tp import RatchetTP
 from sentiment_bias import SentimentBias
 from cluster_tracker import ClusterTracker
+from agdel_buyer import AgdelBuyer
 
 # New CxU-driven modules
 from cxu_store import CxUStore
@@ -81,6 +82,7 @@ reflector: Optional[Reflector] = None
 trainer: Optional[Trainer] = None
 training_mode: bool = False
 alert_manager: AlertManager = AlertManager()
+agdel_buyer: Optional[AgdelBuyer] = None
 
 trade_history: List[Dict] = []
 tick_history: deque = deque(maxlen=720)
@@ -235,7 +237,7 @@ async def lifespan(app: FastAPI):
     global hl_trader, risk_manager, bounce_trigger, ratchet_tp
     global sentiment_bias, cluster_tracker
     global cxu_store, regime_classifier, signal_assessor, trade_decider, reflector, trainer
-    global trade_history
+    global trade_history, agdel_buyer
 
     logger.info("=" * 50)
     logger.info("  AgDel Trader Bot — Starting")
@@ -270,6 +272,17 @@ async def lifespan(app: FastAPI):
     reflector = Reflector(config, cxu_store)
     trainer = Trainer(config, cxu_store)
 
+    # Initialize AGDEL buyer
+    if config.get("agdel", {}).get("enabled", True):
+        agdel_buyer = AgdelBuyer(config)
+        try:
+            await agdel_buyer.start()
+            logger.info("  AGDEL buyer started (wallet: %s)", agdel_buyer.buyer_address[:10] + "..." if hasattr(agdel_buyer, 'buyer_address') and agdel_buyer.buyer_address else "?")
+        except Exception as e:
+            logger.warning("  AGDEL buyer start failed: %s", e)
+    else:
+        logger.info("  AGDEL buyer disabled")
+
     # Connect to Hyperliquid
     try:
         await hl_trader.connect()
@@ -291,6 +304,9 @@ async def lifespan(app: FastAPI):
     if config.get("reflection", {}).get("enabled", True):
         tasks.append(asyncio.create_task(reflection_loop()))
 
+    if agdel_buyer and agdel_buyer.enabled:
+        tasks.append(asyncio.create_task(agdel_poll_loop()))
+
     logger.info("  Background loops started")
     logger.info("=" * 50)
     logger.info("  Dashboard: http://localhost:9002/")
@@ -303,6 +319,11 @@ async def lifespan(app: FastAPI):
     # Shutdown
     for t in tasks:
         t.cancel()
+    if agdel_buyer:
+        try:
+            await agdel_buyer.stop()
+        except Exception:
+            pass
     logger.info("Trading server stopped")
 
 
@@ -524,6 +545,42 @@ async def reflection_loop():
 
         except Exception as e:
             logger.error("Reflection error: %s", e, exc_info=True)
+
+
+# ─── AGDEL Poll Loop ────────────────────────────────────────────
+async def agdel_poll_loop():
+    """Poll AGDEL marketplace for signals, auto-buy candidates, check deliveries."""
+    global purchased_signals, available_signals, agdel_stats
+
+    if not agdel_buyer or not agdel_buyer.enabled:
+        return
+    interval = agdel_buyer.poll_interval
+    await asyncio.sleep(5)  # Startup delay
+    poll_count = 0
+
+    while True:
+        try:
+            purchased = await agdel_buyer.poll_once()
+            if purchased:
+                logger.info("AGDEL: purchased %d signals", len(purchased))
+
+            await agdel_buyer.check_stale_deliveries()
+
+            # Check outcomes less frequently (~every 60s)
+            poll_count += 1
+            if poll_count % max(1, 60 // interval) == 0:
+                await agdel_buyer.check_outcomes()
+
+            # Update state for dashboard and signal assessor
+            purchased_signals = list(agdel_buyer.purchase_log)
+            if hasattr(agdel_buyer, 'get_available_enriched'):
+                available_signals = agdel_buyer.get_available_enriched()
+            if hasattr(agdel_buyer, 'get_stats'):
+                agdel_stats = agdel_buyer.get_stats()
+
+        except Exception as e:
+            logger.error("AGDEL poll error: %s", e)
+        await asyncio.sleep(interval)
 
 
 # ─── WebSocket ───────────────────────────────────────────────────
@@ -943,8 +1000,55 @@ async def toggle_autobuy():
 
 @app.post("/api/agdel/buy")
 async def buy_signal(body: dict):
-    # TODO: wire to agdel_buyer
-    return {"status": "not_implemented"}
+    if not agdel_buyer:
+        return JSONResponse({"error": "AGDEL buyer not initialized"}, status_code=400)
+    commitment_hash = body.get("commitmentHash", "")
+    if not commitment_hash:
+        return JSONResponse({"error": "commitmentHash required"}, status_code=400)
+    try:
+        result = await agdel_buyer.manual_purchase(commitment_hash)
+        return {"status": "purchased", "result": result}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/agdel/available")
+async def get_available_signals():
+    if not agdel_buyer:
+        return []
+    if hasattr(agdel_buyer, 'get_available_enriched'):
+        return agdel_buyer.get_available_enriched()
+    return []
+
+
+@app.get("/api/agdel/purchases")
+async def get_purchases():
+    if not agdel_buyer:
+        return {"purchases": []}
+    return {"purchases": list(agdel_buyer.purchase_log)}
+
+
+@app.post("/api/agdel/webhook/delivery")
+async def agdel_webhook_delivery(body: dict):
+    """Webhook endpoint for AGDEL signal delivery (encrypted)."""
+    if not agdel_buyer:
+        return JSONResponse({"error": "AGDEL buyer not initialized"}, status_code=400)
+    try:
+        if hasattr(agdel_buyer, 'handle_webhook_delivery'):
+            await agdel_buyer.handle_webhook_delivery(body)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error("AGDEL webhook error: %s", e)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/agdel/budget/reset")
+async def reset_agdel_budget():
+    if not agdel_buyer:
+        return JSONResponse({"error": "AGDEL buyer not initialized"}, status_code=400)
+    if hasattr(agdel_buyer, 'budget'):
+        agdel_buyer.budget.reset_hourly()
+    return {"status": "reset"}
 
 
 # ─── Training Mode API ───────────────────────────────────────────
