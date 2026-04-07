@@ -98,7 +98,7 @@ class Trainer(BaseAgent):
         action = instruction.action.lower()
 
         # Fee check
-        fee_cxu = self.cxu_store.by_alias("axiom-fee-kill")
+        fee_cxu = self.cxu_store.by_alias("hyperliquid-fees")
         if fee_cxu and action in ("buy", "sell"):
             # Can't check exact edge without target, but flag the concern
             conflicts.append({
@@ -170,14 +170,14 @@ class Trainer(BaseAgent):
                     })
                     confidence_to_agree -= 0.25
 
-        # Signal direction broken axiom
-        sig_broken_cxu = self.cxu_store.by_alias("axiom-signal-direction-broken")
-        if sig_broken_cxu and action in ("buy", "sell"):
-            # Remind that signals are coin flips for direction
-            if "signal" in instruction.reasoning.lower():
+        # Signal interpretation check
+        sig_cxu = self.cxu_store.by_alias("agdel-signal-scoring")
+        if sig_cxu and action in ("buy", "sell"):
+            requires_agdel = sig_cxu.param_value("highConvictionRequiresAgdel", True)
+            if requires_agdel and "signal" in instruction.reasoning.lower():
                 conflicts.append({
-                    "cxu": sig_broken_cxu.to_citation(),
-                    "concern": "Signal direction is ~50% accurate. Are you using price action to confirm?",
+                    "cxu": sig_cxu.to_citation(),
+                    "concern": "High conviction entries should be confirmed by AGDEL purchased signals with quality scores. Are you relying on direct feed only?",
                     "severity": "info",
                 })
 

@@ -31,7 +31,7 @@
        Bridge variables: shared components use these names,
        mapped to Pyrana Design Guide tokens
        ============================================================ */
-    :root, :root:not(.dark) {
+    :root, .dark {
       --bg-primary: hsl(var(--py-bg));
       --bg-secondary: hsl(var(--py-card));
       --bg-tertiary: hsl(var(--py-muted));
@@ -1382,8 +1382,8 @@
       try {
         // Fallback: load from static files
         const knownFiles = [
-          'axiom-fee-kill.json', 'axiom-hold-default.json',
-          'axiom-signal-direction-broken.json', 'axiom-max-size-or-skip.json',
+          'hyperliquid-fees.json', 'conviction-hold.json',
+          'agdel-signal-scoring.json', 'position-sizing.json',
           'regime-ranging.json', 'regime-trending.json', 'regime-volatile.json',
           'playbook-ranging.json', 'playbook-trending.json', 'playbook-volatile.json',
           'learning-signal-accuracy-by-type.json', 'learning-strategy-performance.json'

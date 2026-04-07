@@ -1,0 +1,66 @@
+{
+  "alias": "conviction-hold",
+  "cxu_id": "1220b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
+  "cxu_object": {
+    "claim": "It is better to be in the market than out of it and once a position is entered based on a valid prediction the default action is to hold through short-term chop until price reaches the predicted target plus fees rather than closing prematurely at a loss unless a hard safety threshold is breached",
+    "supporting_contexts": [
+      {
+        "text": "When a trade is entered based on a CxU-backed prediction with sufficient signal consensus, the agent should have confidence in that prediction and hold the position. Choppy price action that temporarily moves against the position is expected noise, not a reason to exit. The exit target should be the predicted price plus round-trip fee recovery.",
+        "line": null
+      },
+      {
+        "text": "Premature closing locks in losses and pays fees twice — once on the original entry and once on the panic exit. If the prediction thesis has not been invalidated (regime has not changed, signals have not flipped), the position should be held. A hard safety stop-loss must always be in place to cap maximum drawdown, but this is a risk management control, not a trading signal.",
+        "line": null
+      },
+      {
+        "text": "During one week of live trading, the most common mistake was closing positions too early during temporary drawdowns, paying round-trip fees, and then watching price move to the original target. Being out of the market means missing the move entirely.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": ["conviction", "hold", "chop", "premature exit", "drawdown", "safety stop"],
+      "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"],
+      "evidence_strength": "moderate",
+      "quality_metrics": {
+        "confidence_score": 0.92,
+        "specificity_score": 0.88,
+        "completeness_score": 0.90,
+        "standalone_score": 0.95
+      },
+      "hierarchy": {
+        "document_type": "guide",
+        "document_id": "agdel-trading-strategy",
+        "document_title": "AgDel Trading Strategy — Core Principles",
+        "topic": "Position Management",
+        "section": "Hold Discipline",
+        "subsection": null,
+        "page_number": null
+      }
+    },
+    "parameters": {
+      "safetyStopPct": {
+        "value": 6.0,
+        "min": 2.0,
+        "max": 15.0,
+        "step": 0.5,
+        "description": "Maximum drawdown percentage before hard safety exit regardless of thesis"
+      }
+    }
+  },
+  "version": {
+    "number": "2.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "trading-wiki-extraction",
+    "modified_at": "2026-04-07T15:45:00+00:00",
+    "modified_by": "human",
+    "change_description": "Rewrote from 'hold 80% of the time / avoid trading' to 'be in the market with conviction, hold through chop until target+fees, only exit on safety stop or thesis invalidation'. Renamed from axiom-hold-default to conviction-hold.",
+    "prior_cxu_id": "1220b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
+    "source": "human-instruction"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"]
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "alias": "signal-type-oi-divergence",
+  "cxu_id": "12200004a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8",
+  "cxu_object": {
+    "claim": "The open interest divergence signal detects leverage positioning shifts by comparing OI changes to price changes where divergence between the two indicates potential squeezes, flushes, or exhaustion events that precede directional moves",
+    "supporting_contexts": [
+      {
+        "text": "OI divergence signal computes the delta between open interest change percentage and price change percentage over rolling windows. When OI rises but price falls (or vice versa), it indicates a divergence that often resolves with a sharp directional move. Key states: squeeze (OI up, price down — longs accumulating), flush (OI down, price down — forced liquidations), exhaustion (OI up, price up but decelerating).",
+        "line": null
+      },
+      {
+        "text": "Key metadata: oiDeltaPct (OI change %), priceDeltaPct (price change %), divergenceState (squeeze/flush/exhaustion/normal). The divergenceState is the primary interpretive field. Requires fresh OI data — when data is stale, signal quality degrades. Most reliable at 5m and 15m where positioning shifts are detectable but not yet resolved.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "specification",
+      "keywords": ["open interest", "OI", "divergence", "squeeze", "flush", "exhaustion", "leverage"],
+      "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot", "signal-type"],
+      "evidence_strength": "moderate"
+    },
+    "parameters": {
+      "primaryHorizon": { "value": "5m", "description": "Default horizon for state transition detection" },
+      "trustLevel": { "value": "medium", "description": "Current trust level based on observed accuracy" }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T16:30:00+00:00",
+    "created_by": "signal-spec-extraction",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Initial signal type CxU from OI divergence signal spec",
+    "prior_cxu_id": null,
+    "source": "agdel-signal-bots/documentation/specs/05_oi_divergence_signal.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot", "signal-type"]
+  }
+}

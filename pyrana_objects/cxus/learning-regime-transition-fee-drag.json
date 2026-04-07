@@ -1,0 +1,45 @@
+{
+  "alias": "learning-regime-transition-fee-drag",
+  "cxu_id": "122041e715255a584ae4c22655dd994d176e147df171080e9283b41c07b4943fa6c0",
+  "cxu_object": {
+    "claim": "Rapid open-close cycles triggered by regime transitions (e.g., ranging\u2192trending_up) generate significant fee drag with no realized P&L. When a position is opened and closed within the same regime-transition window, fees consume the entire trade value. Minimum hold time or regime-stability confirmation before entry should be considered to reduce churn.",
+    "supporting_contexts": [
+      {
+        "text": "Trade sequence on 2026-04-07: open_short at $2078.25 in ranging regime, immediately closed at $2083.65 when regime flipped to trending_up, then open_long at $2078.25. Total fees: $72.78 on ~$0 net P&L. The short was also directionally wrong (price moved up $5.40 against the short). Three trades, $72.78 in fees, zero realized gain.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "finding",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T12:58:59.854916+00:00",
+    "created_by": "reflector-agent",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by reflector-agent",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

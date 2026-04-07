@@ -1,0 +1,42 @@
+{
+  "alias": "signal-type-momentum",
+  "cxu_id": "12200001a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8",
+  "cxu_object": {
+    "claim": "The momentum signal measures short-horizon directional projections from price velocity and volatility-adjusted continuation or reversion, using ROC and acceleration-based direction scoring, and is most reliable at the five-minute horizon where it captures genuine momentum before noise dominates",
+    "supporting_contexts": [
+      {
+        "text": "Momentum signal computes rate-of-change (ROC) across multiple windows and acceleration (second derivative of price). Direction score is derived from ROC direction weighted by acceleration — positive acceleration in the direction of ROC increases confidence. Volatility adjustment scales projections by current ATR to avoid overshooting in calm markets or undershooting in volatile ones.",
+        "line": null
+      },
+      {
+        "text": "Primary horizon: 5m. The 1m horizon is emitted only under strict data quality conditions. 15m serves as confirmation. 1h is conditional on trend context. Key metadata fields: rawConfidence (pre-capped confidence), dataQuality (ok/degraded/stale indicating data freshness). When dataQuality is degraded or stale, confidence should be discounted heavily.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "specification",
+      "keywords": ["momentum", "signal", "ROC", "acceleration", "velocity", "volatility"],
+      "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot", "signal-type"],
+      "evidence_strength": "moderate"
+    },
+    "parameters": {
+      "primaryHorizon": { "value": "5m", "description": "Most reliable horizon for this signal type" },
+      "trustLevel": { "value": "medium", "description": "Current trust level: low/medium/high based on observed accuracy" }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T16:30:00+00:00",
+    "created_by": "signal-spec-extraction",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Initial signal type CxU from momentum signal spec",
+    "prior_cxu_id": null,
+    "source": "agdel-signal-bots/documentation/specs/01_momentum_signal.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot", "signal-type"]
+  }
+}

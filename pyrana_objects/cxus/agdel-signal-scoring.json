@@ -1,0 +1,57 @@
+{
+  "alias": "agdel-signal-scoring",
+  "cxu_id": "1220c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+  "cxu_object": {
+    "claim": "AGDEL signal quality is computed as ambition times the sum of direction plus precision plus breakout where ambition measures how bold the prediction was relative to expected moves for that horizon, direction is binary pass-fail on whether price moved meaningfully in the predicted direction beyond noise floor, precision measures how close resolution was to the target, and breakout rewards overshooting the target in the correct direction, producing a score from zero to five where one point zero is the payout threshold",
+    "supporting_contexts": [
+      {
+        "text": "Quality score formula: quality_score = ambition × (direction + precision + breakout). Ambition (0-1): spreadRatio / refMoveForHorizon, where spread = |target - entry| and refMove is calibrated per horizon (e.g., 5m = 0.0585%, 15m = 0.0927%, 1h = 0.166% for ETH). Direction (0 or 2): binary — did price move beyond the noise floor in predicted direction? Noise floors are also horizon-specific (e.g., 5m = 0.0049%, 1h = 0.0244%). Precision (0-2): 2 × (1 - |target - resolution| / |target - entry|). Breakout (0-1): bonus when move overshoots target correctly, computed as min(1, (moveRatio - 1) × 0.5). Payout threshold: score >= 1.0.",
+        "line": null
+      },
+      {
+        "text": "Maker reputation is tracked hierarchically: maker × signal_type × horizon_bucket × window (7d/30d/lifetime). Key metrics: hit_rate (wins/total), adjusted_win_rate (Bayesian posterior with prior K=120, prior_rate=0.5), avg_quality_score, adjusted_quality_score (prior=2.0), calibration_score (1 - |avg_confidence - win_rate|), reliability_weight (sample_count / (sample_count + 120)), and default_rate. A maker with 200 signals and 65% hit rate is more trustworthy than one with 10 signals and 90% hit rate — the adjusted scores account for this.",
+        "line": null
+      },
+      {
+        "text": "Confidence is maker-stated at signal creation (0-1), not computed by the protocol. Calibration score measures how well a maker's stated confidence aligns with actual outcomes. A well-calibrated maker who says 70% confidence wins ~70% of the time. Use calibration_score to weight how much to trust a maker's confidence field. Two signal channels: AGDEL marketplace (quality-scored, reputation-tracked, use for conviction) and direct signal feed (~500/tick, use for aggregate consensus and drift detection).",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "axiom",
+      "claim_type": "specification",
+      "keywords": ["AGDEL", "quality score", "ambition", "direction", "precision", "breakout", "reputation", "calibration", "maker", "horizon"],
+      "tags": ["hl-trading", "tier:axiom", "cxu_class:hypothesis", "approval:human", "agdel-trader-bot"],
+      "evidence_strength": "very_strong",
+      "quality_metrics": {
+        "confidence_score": 0.98,
+        "specificity_score": 0.95,
+        "completeness_score": 0.92,
+        "standalone_score": 0.90
+      },
+      "hierarchy": {
+        "document_type": "specification",
+        "document_id": "agdel-market-store",
+        "document_title": "AGDEL Marketplace — Signal Scoring and Reputation",
+        "topic": "Signal Quality",
+        "section": "Scoring Formula",
+        "subsection": null,
+        "page_number": null
+      }
+    }
+  },
+  "version": {
+    "number": "3.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "trading-wiki-extraction",
+    "modified_at": "2026-04-07T16:30:00+00:00",
+    "modified_by": "human",
+    "change_description": "Rewrote with exact AGDEL scoring formula from market-store.ts. This is now the reference CxU for how to interpret quality scores — it is an axiom (the formula is defined by the protocol). Per-signal-type CxUs handle interpretation of individual signal types.",
+    "prior_cxu_id": "1220c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+    "source": "agdel/lib/market-store.ts"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:axiom", "cxu_class:hypothesis", "approval:human", "agdel-trader-bot"]
+  }
+}

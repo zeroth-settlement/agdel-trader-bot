@@ -1,0 +1,42 @@
+{
+  "alias": "signal-type-basis",
+  "cxu_id": "12200006a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8",
+  "cxu_object": {
+    "claim": "The basis signal projects mean-reversion from perpetual premium or discount extremes relative to fair value where an unusually high premium suggests the perp is overpriced and will revert lower while an unusual discount suggests the perp is underpriced and will revert higher",
+    "supporting_contexts": [
+      {
+        "text": "Basis signal computes the premium or discount of the perpetual mark price versus oracle (spot) price, then calculates a z-score against historical premium distribution. Extreme z-scores trigger contrarian projections — high premium projects reversion lower, deep discount projects reversion higher. The reversion half-life parameter estimates how quickly the basis typically normalizes.",
+        "line": null
+      },
+      {
+        "text": "Key metadata: premium (current mark-oracle spread), premiumZScore (z-score against history), reversionHalfLife (estimated time for basis to halve), regimeOverride (can suppress signal during regime shifts when basis may not revert). Historical accuracy was very low (7%) during initial testing but the root cause was identified as symmetric range derivation — this should be re-evaluated with the asymmetric range fix.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "specification",
+      "keywords": ["basis", "premium", "discount", "mean-reversion", "mark-oracle", "z-score"],
+      "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot", "signal-type"],
+      "evidence_strength": "weak"
+    },
+    "parameters": {
+      "primaryHorizon": { "value": "5m", "description": "Primary horizon for basis mean-reversion" },
+      "trustLevel": { "value": "low", "description": "Low trust — historically 7% accuracy, pending re-evaluation after asymmetric range fix" }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T16:30:00+00:00",
+    "created_by": "signal-spec-extraction",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Initial signal type CxU from basis signal spec. Low trust due to historical accuracy issues.",
+    "prior_cxu_id": null,
+    "source": "agdel-signal-bots/documentation/specs/04_basis_signal.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot", "signal-type"]
+  }
+}

@@ -58,11 +58,12 @@ YOUR KNOWLEDGE BASE (these CxUs define your strategy — cite them):
 
 RULES:
 1. Every decision MUST cite at least one CxU by alias.
-2. Default action is "hold" — per axiom-hold-default, holding is correct ~80% of the time.
+2. It is better to be in the market than out — per conviction-hold, once a position is entered on a valid thesis, hold through chop until target+fees unless the thesis is invalidated or safety stop is hit.
 3. Only enter when the setup clearly meets the active playbook criteria.
-4. Check fee viability — per axiom-fee-kill, minimum $13 edge required.
-5. Use max size or skip — per axiom-max-size-or-skip, no partial positions.
-6. Signal direction is unreliable — per axiom-signal-direction-broken, use price action not signal direction.
+4. Check fee viability — per hyperliquid-fees, estimate round-trip cost (taker+taker or maker+taker) and ensure expected profit exceeds it.
+5. Size based on conviction — per position-sizing, scale position size with conviction level and adjust leverage based on whether you are actively managing or on autopilot. Check liquidation distance.
+6. Build conviction from signals — per agdel-signal-scoring, interpret quality scores using the ambition × (direction + precision + breakout) formula. Reference per-signal-type CxUs (signal-type-*) for how to interpret each signal type's metadata.
+7. Do NOT close a position just because it is temporarily underwater. Only close if: the regime has changed, signals have flipped against the thesis, or the safety stop is breached.
 
 Respond with JSON:
 {{
@@ -152,7 +153,7 @@ Recommendation: {signal_data.get('recommendation', 'none')}
 
         if not result:
             # Default to hold on LLM failure
-            hold_cxu = self.cxu_store.by_alias("axiom-hold-default")
+            hold_cxu = self.cxu_store.by_alias("conviction-hold")
             return self._make_output(
                 data={
                     "action": "hold",
@@ -161,7 +162,7 @@ Recommendation: {signal_data.get('recommendation', 'none')}
                     "feeCheck": {"estimatedEdge": 0, "minimumEdge": 13, "passesCheck": False},
                 },
                 citations=[hold_cxu.to_citation()] if hold_cxu else [],
-                reasoning="LLM failed — defaulting to hold per axiom-hold-default",
+                reasoning="LLM failed — defaulting to hold per conviction-hold",
             )
 
         metrics = result.pop("_metrics", {})
@@ -182,7 +183,7 @@ Recommendation: {signal_data.get('recommendation', 'none')}
 
         # Ensure at least one citation
         if not validated_citations:
-            hold_cxu = self.cxu_store.by_alias("axiom-hold-default")
+            hold_cxu = self.cxu_store.by_alias("conviction-hold")
             if hold_cxu:
                 validated_citations.append(hold_cxu.to_citation())
 

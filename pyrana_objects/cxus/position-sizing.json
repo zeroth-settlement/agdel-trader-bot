@@ -1,0 +1,101 @@
+{
+  "alias": "position-sizing",
+  "cxu_id": "1220d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
+  "cxu_object": {
+    "claim": "Position size and leverage should be determined by three factors: conviction level in the prediction, whether the position will be actively managed or left on autopilot, and the liquidation risk at the chosen leverage, because on perpetuals higher leverage amplifies both gains and losses and an unmanaged highly-leveraged position can be liquidated during normal volatility",
+    "supporting_contexts": [
+      {
+        "text": "Fees on Hyperliquid are percentage-based (0.045% taker at Tier 0) so position size does not change the fee ratio — a $5,000 trade and a $15,000 trade both pay the same percentage. The sizing decision is therefore about risk management and conviction, not fee optimization.",
+        "line": null
+      },
+      {
+        "text": "Perpetual futures allow leverage up to 50x on Hyperliquid. At 10x leverage, a 10% adverse price move liquidates the position. At 3x leverage, a 33% move is needed for liquidation. When the agent is actively monitoring and can adjust or close, higher leverage is acceptable. When the agent is on autopilot (e.g., overnight, during low-attention periods), leverage should be reduced to survive unexpected volatility without liquidation.",
+        "line": null
+      },
+      {
+        "text": "Conviction levels should map to position sizing: high conviction with strong signal consensus and clear regime alignment warrants larger positions. Low conviction or ambiguous signals warrant smaller positions or no entry. Scaling into a position as conviction builds (adding on confirmation) is preferable to going all-in on initial signal.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": ["position sizing", "leverage", "conviction", "liquidation", "autopilot", "risk management", "perpetuals"],
+      "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"],
+      "evidence_strength": "moderate",
+      "quality_metrics": {
+        "confidence_score": 0.82,
+        "specificity_score": 0.85,
+        "completeness_score": 0.88,
+        "standalone_score": 0.92
+      },
+      "hierarchy": {
+        "document_type": "guide",
+        "document_id": "agdel-trading-strategy",
+        "document_title": "AgDel Trading Strategy — Core Principles",
+        "topic": "Position Management",
+        "section": "Sizing and Leverage",
+        "subsection": null,
+        "page_number": null
+      }
+    },
+    "parameters": {
+      "highConvictionSizePct": {
+        "value": 80,
+        "min": 50,
+        "max": 100,
+        "step": 5,
+        "description": "Position size (% of equity) when conviction is high and signals strongly aligned"
+      },
+      "mediumConvictionSizePct": {
+        "value": 40,
+        "min": 20,
+        "max": 60,
+        "step": 5,
+        "description": "Position size (% of equity) when conviction is moderate"
+      },
+      "lowConvictionSizePct": {
+        "value": 15,
+        "min": 5,
+        "max": 30,
+        "step": 5,
+        "description": "Position size (% of equity) for low conviction / exploratory entries"
+      },
+      "activeMaxLeverage": {
+        "value": 5,
+        "min": 1,
+        "max": 15,
+        "step": 1,
+        "description": "Maximum leverage when actively managing the position"
+      },
+      "autopilotMaxLeverage": {
+        "value": 2,
+        "min": 1,
+        "max": 5,
+        "step": 1,
+        "description": "Maximum leverage when position is left unattended (overnight, low-attention)"
+      },
+      "liquidationBufferPct": {
+        "value": 50,
+        "min": 20,
+        "max": 80,
+        "step": 5,
+        "description": "Minimum distance to liquidation price as % of the liquidation threshold — e.g., 50% means position should survive a move 50% of the way to liquidation"
+      }
+    }
+  },
+  "version": {
+    "number": "2.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "trading-wiki-extraction",
+    "modified_at": "2026-04-07T16:00:00+00:00",
+    "modified_by": "human",
+    "change_description": "Rewrote from binary 'max size or skip' to conviction-based sizing with leverage awareness. Position size is now a function of conviction, management mode (active vs autopilot), and liquidation risk. Moved from axiom to playbook tier as a testable hypothesis.",
+    "prior_cxu_id": "1220d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
+    "source": "human-instruction"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"]
+  }
+}

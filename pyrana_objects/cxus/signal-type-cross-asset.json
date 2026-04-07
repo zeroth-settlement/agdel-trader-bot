@@ -1,0 +1,42 @@
+{
+  "alias": "signal-type-cross-asset",
+  "cxu_id": "12200005a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8",
+  "cxu_object": {
+    "claim": "The cross-asset signal detects dependency repricing opportunities by analyzing BTC-ETH lead-lag correlation and beta drift where BTC typically leads ETH by minutes and a divergence in their rolling correlation or a shift in rolling beta signals a pending ETH repricing toward the implied fair value",
+    "supporting_contexts": [
+      {
+        "text": "Cross-asset signal tracks rolling correlation and rolling beta between ETH and BTC (primary leader). When BTC moves and ETH has not yet followed, the signal projects ETH will reprice toward BTC's implied move adjusted by beta. The dependency regime classifies the relationship as stable (high correlation, reliable beta), decoupling (correlation breaking down), or re-coupling (correlation recovering).",
+        "line": null
+      },
+      {
+        "text": "Key metadata: leaderAsset (typically BTC), rollingBeta (ETH sensitivity to BTC moves), rollingCorrelation (current correlation coefficient), dependencyRegime (stable/decoupling/re-coupling). Most valuable when dependencyRegime is stable — the lead-lag relationship is predictable. During decoupling, the signal should be discounted. Primary horizon: 5m for lag detection, 15m for broader repricing.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "specification",
+      "keywords": ["cross-asset", "BTC", "ETH", "correlation", "beta", "lead-lag", "dependency"],
+      "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot", "signal-type"],
+      "evidence_strength": "moderate"
+    },
+    "parameters": {
+      "primaryHorizon": { "value": "5m", "description": "Primary horizon for lag detection" },
+      "trustLevel": { "value": "medium", "description": "Current trust level based on observed accuracy" }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T16:30:00+00:00",
+    "created_by": "signal-spec-extraction",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Initial signal type CxU from cross-asset signal spec",
+    "prior_cxu_id": null,
+    "source": "agdel-signal-bots/documentation/specs/06_cross_asset_signal.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot", "signal-type"]
+  }
+}

@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, Optional
 
 import httpx
+import websockets
 
 logger = logging.getLogger("hl_trader")
 
 HL_API_URL = "https://api.hyperliquid.xyz"
+HL_WS_URL = "wss://api.hyperliquid.xyz/ws"
 TAKER_FEE_PCT = 0.000432  # 0.0432% per side (measured from actual HL trades)
 MIN_ORDER_VALUE_USD = 11.0  # Hyperliquid requires $10 minimum; use $11 for safety
 
@@ -97,6 +101,10 @@ class HLTrader:
     async def connect(self):
         """Initialize connections. For live mode, set up hyperliquid SDK."""
         self._main_address = os.environ.get("HYPERLIQUID_WALLET_ADDRESS", "")
+        self._ws_price: float = 0.0
+        self._ws_connected: bool = False
+        self._ws_task: Optional[asyncio.Task] = None
+        self._price_callback: Optional[Callable[[float], Any]] = None
 
         if self.mode == "live":
             try:
@@ -130,6 +138,66 @@ class HLTrader:
                 raise
         else:
             logger.info("Paper trading mode: starting balance=$%.2f", self._paper_balance)
+
+    async def start_price_feed(self, callback: Callable[[float], Any] | None = None):
+        """Start WebSocket price feed from Hyperliquid. Calls callback(price) on each update."""
+        self._price_callback = callback
+        self._ws_task = asyncio.create_task(self._ws_price_loop())
+        logger.info("Started Hyperliquid WebSocket price feed for %s", self.asset)
+
+    async def stop_price_feed(self):
+        """Stop the WebSocket price feed."""
+        if self._ws_task:
+            self._ws_task.cancel()
+            self._ws_task = None
+        self._ws_connected = False
+
+    async def _ws_price_loop(self):
+        """Reconnecting WebSocket loop for allMids subscription."""
+        backoff = 1.0
+        while True:
+            try:
+                async with websockets.connect(HL_WS_URL, ping_interval=20, ping_timeout=10) as ws:
+                    # Subscribe to allMids
+                    await ws.send(json.dumps({
+                        "method": "subscribe",
+                        "subscription": {"type": "allMids"},
+                    }))
+                    self._ws_connected = True
+                    backoff = 1.0
+                    logger.info("Hyperliquid WS connected — streaming allMids")
+
+                    async for raw in ws:
+                        try:
+                            msg = json.loads(raw)
+                            data = msg.get("data", {})
+                            mids = data.get("mids", {})
+                            price_str = mids.get(self.asset)
+                            if price_str:
+                                price = float(price_str)
+                                self._ws_price = price
+                                if self._price_callback:
+                                    try:
+                                        result = self._price_callback(price)
+                                        if asyncio.iscoroutine(result):
+                                            await result
+                                    except Exception as cb_err:
+                                        logger.debug("Price callback error: %s", cb_err)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+
+            except asyncio.CancelledError:
+                logger.info("Hyperliquid WS feed cancelled")
+                break
+            except Exception as e:
+                self._ws_connected = False
+                logger.warning("Hyperliquid WS disconnected: %s — reconnecting in %.0fs", e, backoff)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 1.5, 30.0)
+
+    @property
+    def ws_connected(self) -> bool:
+        return self._ws_connected
 
     async def get_hl_account(self) -> tuple[Position | None, dict]:
         """Always fetch position + portfolio from Hyperliquid API (single call)."""
@@ -181,7 +249,10 @@ class HLTrader:
             return None, empty_portfolio
 
     async def get_mark_price(self) -> float:
-        """Fetch current mid price from Hyperliquid."""
+        """Return current mid price. Prefers real-time WS price, falls back to REST."""
+        if self._ws_price > 0:
+            return self._ws_price
+        # Fallback to REST
         try:
             resp = await self._http.post("/info", json={"type": "allMids"})
             resp.raise_for_status()
