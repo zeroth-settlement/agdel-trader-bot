@@ -1,0 +1,611 @@
+<!--
+  ============================================================================
+  WARNING — COMPONENT SHOWCASE ONLY — DO NOT USE AS A DEMO TEMPLATE
+  ============================================================================
+  This file uses HARDCODED MOCK DATA and STUBS OUT LibraryApiClient.
+  It exists solely to test shared components in isolation.
+
+  When building a real demo with /demo-builder:
+    - Use the REAL LibraryApiClient from /components/pyrana-library/api-client.js
+    - Connect to pyrana-playground-services APIs (ports 8101-8105)
+    - Load data from APIs, NOT from hardcoded arrays
+    - See _example/README.md for full details
+  ============================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pyrana Shared Components — Example Dashboard</title>
+
+  <!-- Design System CSS -->
+  <link rel="stylesheet" href="../design-guide/pyrana-theme.css" />
+  <link rel="stylesheet" href="../design-guide/pyrana-components.css" />
+  <link rel="stylesheet" href="../design-guide/pyrana-utilities.css" />
+
+  <style>
+    /* Bridge variables: the library tray uses its own --var names
+       inherited from the full agent-builder app.  Map them to py-* tokens
+       so everything renders correctly in this standalone page. */
+    :root {
+      --bg-primary:      hsl(var(--py-bg));
+      --bg-secondary:    hsl(var(--py-bg-subtle));
+      --bg-tertiary:     hsl(var(--py-muted));
+      --bg-card:         hsl(var(--py-card));
+      --bg-hover:        hsl(var(--py-muted));
+      --border:          hsl(var(--py-border));
+      --border-light:    hsl(var(--py-border));
+      --border-subtle:   hsl(var(--py-border));
+      --text-primary:    hsl(var(--py-fg));
+      --text-secondary:  hsl(var(--py-fg));
+      --text-muted:      hsl(var(--py-fg-muted));
+      --accent:          hsl(var(--py-primary));
+      --accent-dim:      hsl(var(--py-accent));
+      --success:         hsl(var(--py-success));
+      --success-dim:     hsl(var(--py-success-light));
+      --warning:         hsl(var(--py-warning));
+      --error:           hsl(var(--py-error));
+      --color-cxu:       var(--py-cxu-text);
+      --color-cxu-dim:   var(--py-cxu-bg);
+      --color-script:    var(--py-script-text);
+      --color-script-dim:var(--py-script-bg);
+      --color-skill:     var(--py-skill-text);
+      --color-skill-dim: var(--py-skill-bg);
+      --color-prompt:    var(--py-prompt-text);
+      --color-prompt-dim:var(--py-prompt-bg);
+      --color-agent:     var(--py-agent-text);
+      --color-agent-dim: var(--py-agent-bg);
+      --tray-width:      320px;
+    }
+
+    /* Page chrome */
+    .demo-topbar {
+      height: 48px;
+      background: hsl(var(--py-sidebar-bg));
+      color: hsl(var(--py-sidebar-fg));
+      display: flex;
+      align-items: center;
+      padding: 0 var(--py-space-4);
+      gap: var(--py-space-3);
+      font-weight: 600;
+      font-size: 0.875rem;
+      border-bottom: 1px solid hsl(var(--py-sidebar-border));
+    }
+    .demo-topbar svg { width: 22px; height: 22px; flex-shrink:0; }
+    .demo-topbar img { width: 22px; height: 22px; flex-shrink:0; }
+    .demo-topbar .btn-icon { width:14px; height:14px; }
+    .demo-topbar button svg { width:14px; height:14px; }
+    /* swap sun/moon visibility based on theme */
+    .demo-topbar .icon-sun  { display:none; }
+    .demo-topbar .icon-moon { display:inline; }
+    .dark .demo-topbar .icon-sun  { display:inline; }
+    .dark .demo-topbar .icon-moon { display:none; }
+    .demo-topbar .spacer { flex:1; }
+    .demo-topbar button {
+      color: white;
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    /* swap logo visibility based on theme */
+    .py-logo-light { display: inline-block; }
+    .py-logo-dark { display: none; }
+    .dark .py-logo-light { display: none; }
+    .dark .py-logo-dark { display: inline-block; }
+    .demo-body { display: flex; height: calc(100vh - 48px); overflow: hidden; }
+    .demo-main { flex:1; overflow-y: auto; padding: var(--py-space-6) var(--py-space-8); }
+    #libraryTray { height: 100%; }
+
+    /* Expanded-view field classes (bridged from agent-builder) */
+    .resources-modal-field { margin-bottom: 16px; }
+    .resources-modal-field label {
+      display: block; font-size: 12px; font-weight: 500;
+      color: var(--text-secondary); margin-bottom: 6px;
+    }
+    .resources-modal-field input,
+    .resources-modal-field textarea,
+    .resources-modal-field select {
+      width: 100%; padding: 10px 12px;
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-size: 13px;
+    }
+    .resources-modal-field textarea { resize: vertical; min-height: 60px; }
+    .step-input {
+      width: 100%; padding: 10px 12px;
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-size: 13px;
+      resize: vertical;
+    }
+
+    .section-label {
+      font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.1em;
+      text-transform: uppercase; color: hsl(var(--py-fg-muted));
+      margin-bottom: var(--py-space-3);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Top Bar ──────────────────────────────────────────── -->
+<div class="demo-topbar">
+  <img src="../design-guide/logos/pyrana-white.svg" class="py-icon-md" alt="Pyrana" />
+  <span>Pyrana Shared Components</span>
+  <span class="spacer"></span>
+  <button type="button" class="py-btn py-btn-xs py-btn-outline" aria-label="Toggle dark mode" onclick="document.documentElement.classList.toggle('dark')">
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+  </button>
+  <button type="button" class="py-btn py-btn-xs py-btn-outline" onclick="PyranaLibrary.toggle()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+    Library
+  </button>
+</div>
+
+<!-- ─── Body: main + library tray ────────────────────────── -->
+<div class="demo-body">
+
+  <!-- ─── Main Content ──────────────────────────────────── -->
+  <div class="demo-main">
+    <h2 class="py-mb-6">Component Showcase</h2>
+
+    <!-- Pyrana Logo -->
+    <div class="py-mb-8">
+      <div class="section-label">Pyrana Logo</div>
+      <div class="py-flex py-gap-4 py-flex-wrap" style="align-items:center">
+        <div class="py-flex py-gap-2" style="align-items:center">
+          <img src="../design-guide/logos/pyrana-black.svg" class="py-logo-sm py-logo-light" alt="Pyrana Logo" />
+          <img src="../design-guide/logos/pyrana-grey.svg" class="py-logo-sm py-logo-dark" alt="Pyrana Logo" />
+          <span class="py-text-sm">SM (20px)</span>
+        </div>
+        <div class="py-flex py-gap-2" style="align-items:center">
+          <img src="../design-guide/logos/pyrana-black.svg" class="py-logo-md py-logo-light" alt="Pyrana Logo" />
+          <img src="../design-guide/logos/pyrana-grey.svg" class="py-logo-md py-logo-dark" alt="Pyrana Logo" />
+          <span class="py-text-sm">MD (28px)</span>
+        </div>
+        <div class="py-flex py-gap-2" style="align-items:center">
+          <img src="../design-guide/logos/pyrana-black.svg" class="py-logo-lg py-logo-light" alt="Pyrana Logo" />
+          <img src="../design-guide/logos/pyrana-grey.svg" class="py-logo-lg py-logo-dark" alt="Pyrana Logo" />
+          <span class="py-text-sm">LG (40px)</span>
+        </div>
+        <div class="py-flex py-gap-2" style="align-items:center">
+          <img src="../design-guide/logos/pyrana-black.svg" class="py-logo-xl py-logo-light" alt="Pyrana Logo" />
+          <img src="../design-guide/logos/pyrana-grey.svg" class="py-logo-xl py-logo-dark" alt="Pyrana Logo" />
+          <span class="py-text-sm">XL (56px)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="py-mb-8">
+      <div class="section-label">Buttons</div>
+      <div class="py-flex py-gap-2 py-flex-wrap">
+        <button type="button" class="py-btn py-btn-md py-btn-primary">Primary</button>
+        <button type="button" class="py-btn py-btn-md py-btn-secondary">Secondary</button>
+        <button type="button" class="py-btn py-btn-md py-btn-outline">Outline</button>
+        <button type="button" class="py-btn py-btn-md py-btn-ghost">Ghost</button>
+        <button type="button" class="py-btn py-btn-md py-btn-destructive">Destructive</button>
+      </div>
+      <div class="py-flex py-gap-2 py-flex-wrap py-mt-4">
+        <button type="button" class="py-btn py-btn-sm py-btn-cxu">CxU</button>
+        <button type="button" class="py-btn py-btn-sm py-btn-prompt">Prompt</button>
+        <button type="button" class="py-btn py-btn-sm py-btn-script">Script</button>
+        <!-- Skill button hidden; placeholder for future use -->
+        <button type="button" class="py-btn py-btn-sm py-btn-agent">Agent</button>
+        <button type="button" class="py-btn py-btn-sm py-btn-data">Data</button>
+      </div>
+    </div>
+
+    <!-- Badges -->
+    <div class="py-mb-8">
+      <div class="section-label">Badges &amp; Status</div>
+      <div class="py-flex py-gap-2 py-flex-wrap" style="align-items:center">
+        <span class="py-badge py-badge-default">Default</span>
+        <span class="py-badge py-badge-success">Success</span>
+        <span class="py-badge py-badge-warning">Warning</span>
+        <span class="py-badge py-badge-error">Error</span>
+        <span class="py-badge py-badge-info">Info</span>
+        <span class="py-separator-vertical"></span>
+        <span class="py-badge py-badge-pill py-badge-cxu">CxU</span>
+        <span class="py-badge py-badge-pill py-badge-prompt">Prompt</span>
+        <span class="py-badge py-badge-pill py-badge-script">Script</span>
+        <!-- Skill badge hidden; placeholder for future use -->
+        <span class="py-badge py-badge-pill py-badge-agent">Agent</span>
+        <span class="py-badge py-badge-pill py-badge-data">Data</span>
+        <span class="py-badge py-badge-pill py-badge-workflow">Workflow</span>
+        <span class="py-badge py-badge-pill py-badge-ai">AI</span>
+      </div>
+      <div class="py-flex py-gap-4 py-mt-4" style="align-items:center">
+        <span class="py-priority py-priority-urgent">Urgent</span>
+        <span class="py-priority py-priority-opportunity">Opportunity</span>
+        <span class="py-priority py-priority-monitor">Monitor</span>
+        <span class="py-priority py-priority-normal">Normal</span>
+        <span class="py-separator-vertical"></span>
+        <span class="py-flex py-gap-2" style="align-items:center">
+          <span class="py-status-dot py-status-dot-md py-status-online"></span> Online
+          <span class="py-status-dot py-status-dot-md py-status-busy"></span> Busy
+          <span class="py-status-dot py-status-dot-md py-status-offline"></span> Offline
+          <span class="py-status-dot py-status-dot-md py-status-error"></span> Error
+        </span>
+      </div>
+    </div>
+
+    <!-- CxU Pills (inline) -->
+    <div class="py-mb-8">
+      <div class="section-label">CxU Pills (inline citations)</div>
+      <div class="py-card">
+        <div class="py-card-content" id="cxuPillDemo" style="line-height:2">
+          <!-- populated by JS below -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Cards -->
+    <div class="py-mb-8">
+      <div class="section-label">Cards</div>
+      <div class="py-grid py-grid-3">
+        <div class="py-card py-card-interactive">
+          <div class="py-card-header py-card-header-cxu">
+            <h5>Customer Risk Model</h5>
+          </div>
+          <div class="py-card-content">
+            <p class="py-text-sm py-text-muted py-mb-2">Evaluates customer churn probability using historical transaction patterns.</p>
+            <span class="py-badge py-badge-pill py-badge-cxu">CxU</span>
+          </div>
+        </div>
+        <div class="py-card py-card-interactive">
+          <div class="py-card-header py-card-header-prompt">
+            <h5>Summarise Report</h5>
+          </div>
+          <div class="py-card-content">
+            <p class="py-text-sm py-text-muted py-mb-2">Generates an executive summary from a quarterly business report.</p>
+            <span class="py-badge py-badge-pill py-badge-prompt">Prompt</span>
+          </div>
+        </div>
+        <div class="py-card py-card-interactive">
+          <div class="py-card-header py-card-header-agent">
+            <h5>Compliance Checker</h5>
+          </div>
+          <div class="py-card-content">
+            <p class="py-text-sm py-text-muted py-mb-2">Runs regulatory checks against latest policy documents.</p>
+            <span class="py-badge py-badge-pill py-badge-agent">Agent</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="py-mb-8">
+      <div class="section-label">Alerts</div>
+      <div class="py-flex-col py-gap-3">
+        <div class="py-alert py-alert-info">
+          <div><div class="py-alert-title">Information</div><div class="py-alert-body">3 new CxUs were published to the library today.</div></div>
+        </div>
+        <div class="py-alert py-alert-success">
+          <div><div class="py-alert-title">Agent deployed</div><div class="py-alert-body">Compliance Checker v2.1 is now live in production.</div></div>
+        </div>
+        <div class="py-alert py-alert-warning">
+          <div><div class="py-alert-title">Rate limit approaching</div><div class="py-alert-body">Token usage at 85% of monthly allocation.</div></div>
+        </div>
+        <div class="py-alert py-alert-error">
+          <div><div class="py-alert-title">Pipeline failed</div><div class="py-alert-body">Data ingestion job timed out after 30 minutes.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="py-mb-8">
+      <div class="section-label">Table</div>
+      <div class="py-card">
+        <table class="py-table">
+          <thead>
+            <tr><th>Name</th><th>Type</th><th>Status</th><th>Updated</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>customer-risk-model</td><td><span class="py-badge py-badge-cxu">CxU</span></td><td><span class="py-status-dot py-status-dot-sm py-status-online"></span> Active</td><td>2 hours ago</td></tr>
+            <tr><td>summarise-report</td><td><span class="py-badge py-badge-prompt">Prompt</span></td><td><span class="py-status-dot py-status-dot-sm py-status-online"></span> Active</td><td>1 day ago</td></tr>
+            <tr><td>etl-daily-load</td><td><span class="py-badge py-badge-script">Script</span></td><td><span class="py-status-dot py-status-dot-sm py-status-busy"></span> Running</td><td>5 min ago</td></tr>
+            <tr><td>compliance-checker</td><td><span class="py-badge py-badge-agent">Agent</span></td><td><span class="py-status-dot py-status-dot-sm py-status-online"></span> Active</td><td>3 days ago</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Form Inputs -->
+    <div class="py-mb-8">
+      <div class="section-label">Form Inputs</div>
+      <div class="py-card">
+        <div class="py-card-content py-grid py-grid-2">
+          <div>
+            <label class="py-label">Alias</label>
+            <input class="py-input" placeholder="e.g. customer-risk-model" />
+          </div>
+          <div>
+            <label class="py-label" for="resource-type">Type</label>
+            <select id="resource-type" class="py-input py-select">
+              <option>CxU</option><option>Prompt</option><option>Script</option><option>Agent</option>
+            </select>
+          </div>
+          <div style="grid-column:span 2">
+            <label class="py-label">Description</label>
+            <textarea class="py-input py-textarea" placeholder="Describe the resource..."></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="py-mb-8">
+      <div class="section-label">Tabs</div>
+      <div class="py-card">
+        <div class="py-tabs">
+          <button type="button" class="py-tab py-tab-active">Overview</button>
+          <button type="button" class="py-tab">Configuration</button>
+          <button type="button" class="py-tab">History</button>
+          <button type="button" class="py-tab">Logs</button>
+        </div>
+        <div class="py-card-content">
+          <p class="py-text-sm py-text-muted">Tab content would appear here.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Code Block -->
+    <div class="py-mb-8">
+      <div class="section-label">Code Block</div>
+      <pre class="py-code">{
+  "alias": "customer-risk-model",
+  "type": "CxU",
+  "status": "Active",
+  "cxu_id": "1220abc456def789..."
+}</pre>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div class="py-mb-8">
+      <div class="section-label">Loading Spinner</div>
+      <div class="py-flex py-gap-4" style="align-items:center">
+        <span class="py-spinner py-spinner-sm"></span>
+        <span class="py-spinner py-spinner-md"></span>
+        <span class="py-spinner py-spinner-lg"></span>
+        <span class="py-text-sm py-text-muted">Loading resources...</span>
+      </div>
+    </div>
+
+  </div><!-- /demo-main -->
+
+  <!-- ─── Library Side Tray ──────────────────────────────── -->
+  <div id="libraryTray"></div>
+
+</div><!-- /demo-body -->
+
+<!-- ─── JS: Shared Components ────────────────────────────── -->
+<script src="../components/cxu-pill.js"></script>
+<script src="../components/pyrana-library/styles.js"></script>
+<script src="../components/pyrana-library/object-list.js"></script>
+<script src="../components/pyrana-library/expanded-view.js"></script>
+<script src="../components/pyrana-library/modal.js"></script>
+<script src="../components/pyrana-library/index.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Mock CxU data ────────────────────────────────────────
+  const MOCK_CXUS = [
+    { alias: 'customer-risk-model',    cxu_id: '1220abc456def789abcdef1234567890abcdef1234567890abcdef1234567890ab', claim: 'Evaluates customer churn probability from transaction patterns', status: 'Active', tags: ['risk','analytics'], keywords: ['churn','revenue'] },
+    { alias: 'revenue-forecast-q4',    cxu_id: '1220def789abc456abcdef5678901234abcdef5678901234abcdef5678901234de', claim: 'Q4 revenue projections based on historical sales data',          status: 'Active', tags: ['finance','analytics'], keywords: ['forecast','revenue'] },
+    { alias: 'compliance-rules-2024',  cxu_id: '1220111222333444555666777888999aaabbbcccdddeeefff0001112223334445566', claim: 'Regulatory compliance rule set for FY2024',                      status: 'Active', tags: ['compliance','legal'], keywords: ['regulation','audit'] },
+    { alias: 'product-catalog-schema', cxu_id: '1220aaa111bbb222ccc333ddd444eee555fff666aaa777bbb888ccc999ddd000eee1', claim: 'Canonical product catalog data schema',                          status: 'Active', tags: ['data','schema'], keywords: ['catalog','product'] },
+    { alias: 'support-escalation',     cxu_id: '1220bbb222ccc333ddd444eee555fff666aaa777bbb888ccc999ddd000eee111fff2', claim: 'Escalation matrix and SLA rules for support tickets',           status: 'Active', tags: ['support','operations'], keywords: ['escalation','SLA'] },
+  ];
+
+  // ── Populate CxU pill demo ───────────────────────────────
+  const demoText =
+    'The analysis references the <strong>customer risk model</strong> ' +
+    '(customer-risk-model:1220abc456def789abcdef1234567890abcdef1234567890abcdef1234567890ab) ' +
+    'and the <strong>revenue forecast</strong> ' +
+    '(revenue-forecast-q4:1220def789abc456abcdef5678901234abcdef5678901234abcdef5678901234de) ' +
+    'to flag accounts that exceed the thresholds defined in ' +
+    '(compliance-rules-2024:1220111222333444555666777888999aaabbbcccdddeeefff0001112223334445566). ' +
+    'Product details come from ' +
+    '(product-catalog-schema:1220aaa111bbb222ccc333ddd444eee555fff666aaa777bbb888ccc999ddd000eee1).';
+
+  document.getElementById('cxuPillDemo').innerHTML =
+    CxuPill.processMarkdownCitations(demoText, MOCK_CXUS);
+
+  // ── Wire up CxU pill click to open expanded view ─────────
+  window.openCxuInResourcesTray = function(cxuId) {
+    PyranaLibrary.open();
+    PyranaLibrary.openItem(cxuId, 'cxu_manager');
+  };
+
+  // ── Rich mock item details (returned by fetchItem) ───────
+  const MOCK_ITEMS = {
+    // CxUs
+    '1220abc456def789abcdef1234567890abcdef1234567890abcdef1234567890ab': {
+      cxu_id: '1220abc456def789abcdef1234567890abcdef1234567890abcdef1234567890ab',
+      alias: 'customer-risk-model',
+      claim: 'Customers with declining monthly transaction volume over 3 consecutive months have a 74% likelihood of churning within the following quarter, based on analysis of 2.1M account records from 2019-2024.',
+      knowledge_type: 'derived',
+      claim_type: 'observation',
+      status: 'Active',
+      tags: ['risk', 'analytics'],
+      keywords: ['churn', 'revenue', 'retention'],
+      supporting_contexts: [
+        { text: '{"fields":[{"name":"account_id","type":"string","description":"Unique account identifier"},{"name":"monthly_txn_volume","type":"float","description":"Total transaction volume for the month"},{"name":"churn_flag","type":"boolean","description":"Whether the customer churned"}]}', source: 'data-warehouse' },
+        { text: 'Logistic regression model trained on 2.1M records showed transaction velocity decline as the strongest single predictor of churn (AUC 0.82).', source: 'model-report-q3' }
+      ],
+      created_at: '2024-11-15T10:30:00Z',
+      updated_at: '2025-01-22T14:05:00Z',
+      usage_count: 47
+    },
+    '1220def789abc456abcdef5678901234abcdef5678901234abcdef5678901234de': {
+      cxu_id: '1220def789abc456abcdef5678901234abcdef5678901234abcdef5678901234de',
+      alias: 'revenue-forecast-q4',
+      claim: 'Q4 revenue is projected at $12.4M based on pipeline weighted probability and historical seasonal uplift of 18% over Q3.',
+      knowledge_type: 'derived',
+      claim_type: 'finding',
+      status: 'Active',
+      tags: ['finance', 'analytics'],
+      keywords: ['forecast', 'revenue'],
+      created_at: '2024-12-01T09:00:00Z',
+      updated_at: '2025-01-10T11:20:00Z',
+      usage_count: 23
+    },
+    '1220111222333444555666777888999aaabbbcccdddeeefff0001112223334445566': {
+      cxu_id: '1220111222333444555666777888999aaabbbcccdddeeefff0001112223334445566',
+      alias: 'compliance-rules-2024',
+      claim: 'All customer-facing communications must include the mandated regulatory disclosure and be reviewed by compliance within 48 hours of creation.',
+      knowledge_type: 'prescribed',
+      claim_type: 'requirement',
+      status: 'Active',
+      tags: ['compliance', 'legal'],
+      keywords: ['regulation', 'audit'],
+      supporting_contexts: [
+        { text: 'FCA handbook section COBS 4.2: Fair, clear and not misleading communications.', source: 'regulatory-handbook' }
+      ],
+      created_at: '2024-09-01T08:00:00Z',
+      updated_at: '2024-12-20T16:45:00Z',
+      usage_count: 112
+    },
+    '1220aaa111bbb222ccc333ddd444eee555fff666aaa777bbb888ccc999ddd000eee1': {
+      cxu_id: '1220aaa111bbb222ccc333ddd444eee555fff666aaa777bbb888ccc999ddd000eee1',
+      alias: 'product-catalog-schema',
+      claim: 'The canonical product catalog schema defines the standard field set used by all downstream consumers, including pricing, search, and recommendation engines.',
+      knowledge_type: 'axiom',
+      claim_type: 'specification',
+      status: 'Active',
+      tags: ['data', 'schema'],
+      keywords: ['catalog', 'product'],
+      supporting_contexts: [
+        { text: '{"fields":[{"name":"product_id","type":"string","description":"SKU identifier"},{"name":"name","type":"string","description":"Product display name"},{"name":"price_cents","type":"integer","description":"Price in cents"},{"name":"category","type":"string","description":"Primary category"},{"name":"available","type":"boolean","description":"In-stock flag"}]}', source: 'schema-registry' }
+      ],
+      created_at: '2024-06-10T12:00:00Z',
+      updated_at: '2024-11-05T09:30:00Z',
+      usage_count: 89
+    },
+    '1220bbb222ccc333ddd444eee555fff666aaa777bbb888ccc999ddd000eee111fff2': {
+      cxu_id: '1220bbb222ccc333ddd444eee555fff666aaa777bbb888ccc999ddd000eee111fff2',
+      alias: 'support-escalation',
+      claim: 'Tickets with severity P1 or P2 that remain unresolved after 2 hours must be escalated to the regional lead, with executive notification triggered at the 4-hour mark.',
+      knowledge_type: 'prescribed',
+      claim_type: 'procedure',
+      status: 'Active',
+      tags: ['support', 'operations'],
+      keywords: ['escalation', 'SLA'],
+      created_at: '2024-08-20T11:00:00Z',
+      updated_at: '2025-01-05T08:15:00Z',
+      usage_count: 34
+    },
+    // Scripts
+    's-001': {
+      id: 's-001', name: 'etl-daily-load', display_name: 'ETL Daily Load',
+      description: 'Daily ETL pipeline for warehouse refresh. Pulls from 3 upstream sources, applies transformation rules, and loads into the analytics warehouse.',
+      category: 'data', language: 'python', entry_point: 'main',
+      code: 'def main():\n    sources = load_config("sources.yaml")\n    for src in sources:\n        raw = extract(src)\n        clean = transform(raw, rules=src["rules"])\n        load(clean, target="analytics_warehouse")\n    log.info("ETL complete")',
+      status: 'Active',
+      created_at: '2024-10-01T07:00:00Z',
+      updated_at: '2025-01-20T06:00:00Z',
+      usage_count: 365
+    },
+    's-002': {
+      id: 's-002', name: 'report-generator', display_name: 'Report Generator',
+      description: 'Generates PDF reports from Jinja templates and data payloads. Supports charts, tables, and custom branding.',
+      category: 'reporting', language: 'python', entry_point: 'generate',
+      code: 'def generate(template_name, data, output_path):\n    tpl = load_template(template_name)\n    rendered = tpl.render(**data)\n    pdf = html_to_pdf(rendered)\n    save(pdf, output_path)',
+      status: 'Active',
+      created_at: '2024-07-15T14:00:00Z',
+      updated_at: '2024-12-10T10:00:00Z',
+      usage_count: 128
+    },
+    // Prompts
+    'p-001': {
+      id: 'p-001', name: 'summarise-report',
+      description: 'Generates an executive summary from a quarterly business report. Extracts key metrics, risks, and action items.',
+      category: 'extraction',
+      objective: { intent: 'Summarise a quarterly business report into an executive briefing', success_criteria: 'Summary covers revenue, risks, and top 3 action items' },
+      system_prompt: 'You are an experienced business analyst. Summarise the provided quarterly report into a concise executive briefing. Focus on: (1) headline metrics, (2) material risks, (3) recommended actions.',
+      output_contract: { format: 'markdown', sections: ['headline_metrics', 'risks', 'action_items'] },
+      status: 'Active',
+      cxu_count: 3,
+      created_at: '2024-11-01T09:00:00Z',
+      updated_at: '2025-01-15T13:00:00Z',
+      usage_count: 56
+    },
+    'p-002': {
+      id: 'p-002', name: 'draft-email',
+      description: 'Drafts a customer outreach email based on account context and campaign objectives.',
+      category: 'generation',
+      objective: { intent: 'Generate a personalised outreach email', success_criteria: 'Email is on-brand, addresses customer by name, includes relevant offer' },
+      system_prompt: 'You are a customer success specialist. Draft a warm, professional outreach email. Use the customer context provided to personalise the message.',
+      status: 'Active',
+      cxu_count: 1,
+      created_at: '2024-12-05T10:30:00Z',
+      updated_at: '2025-01-18T09:00:00Z',
+      usage_count: 41
+    },
+    // Agents
+    'a-001': {
+      id: 'a-001', name: 'compliance-checker',
+      description: 'Runs regulatory compliance checks against the latest policy documents. Flags violations, scores risk, and generates remediation recommendations.',
+      category: 'analysis',
+      status: 'Active',
+      tags: ['compliance', 'regulatory'],
+      created_at: '2024-10-20T11:00:00Z',
+      updated_at: '2025-01-25T15:30:00Z',
+      usage_count: 78
+    }
+  };
+
+  // ── Mock API Client ──────────────────────────────────────
+  // The real library fetches from APIs — here we stub the API
+  // client so everything renders with local data.
+  window.LibraryApiClient = {
+    API_CONFIG: {
+      cxu_manager:    { name: 'CxUs',    idField: 'cxu_id', displayField: 'alias', descField: 'claim' },
+      script_manager: { name: 'Scripts',  idField: 'id', displayField: 'name', descField: 'description' },
+      // skill_manager reserved for future use
+      prompt_manager: { name: 'Prompts',  idField: 'id', displayField: 'name', descField: 'description' },
+      agent_manager:  { name: 'Agents',   idField: 'id', displayField: 'name', descField: 'description' },
+    },
+    init() {},
+    async checkAllHealth() {
+      // Brief delay to show the pending → healthy transition
+      await new Promise(r => setTimeout(r, 600));
+      return { cxu_manager:'ok', script_manager:'ok', prompt_manager:'ok', agent_manager:'ok' };
+    },
+    async fetchList(apiKey) {
+      const MOCK_DATA = {
+        cxu_manager: MOCK_CXUS,
+        script_manager: [
+          { id: 's-001', name: 'etl-daily-load',    description: 'Daily ETL pipeline for warehouse refresh',    status: 'Active' },
+          { id: 's-002', name: 'report-generator',   description: 'Generates PDF reports from templates',        status: 'Active' },
+        ],
+        // skill_manager reserved for future use
+        prompt_manager: [
+          { id: 'p-001', name: 'summarise-report',   description: 'Executive summary from quarterly report',    status: 'Active' },
+          { id: 'p-002', name: 'draft-email',        description: 'Draft customer outreach email',              status: 'Active' },
+        ],
+        agent_manager: [
+          { id: 'a-001', name: 'compliance-checker', description: 'Regulatory checks against policy documents', status: 'Active' },
+        ],
+      };
+      return MOCK_DATA[apiKey] || [];
+    },
+    async fetchItem(apiKey, itemId) {
+      return MOCK_ITEMS[itemId] || {};
+    },
+    flattenApiResponse(raw) {
+      // Mock items are already flat — just add _mutableFields
+      const result = Object.assign({}, raw);
+      result._mutableFields = new Set(['status', 'tags', 'keywords', 'description', 'alias']);
+      return result;
+    },
+    async updateItem() {},
+  };
+
+  PyranaLibrary.init(document.getElementById('libraryTray'));
+})();
+</script>
+
+</body>
+</html>

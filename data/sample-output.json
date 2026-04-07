@@ -1,0 +1,106 @@
+{
+  "project": "agdel-trader-bot",
+  "timestamp": "2026-04-07T12:00:00Z",
+  "model": "claude-opus-4-6",
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Regime Classification",
+      "agents": [
+        {
+          "agentId": "regime-classifier",
+          "agentName": "Regime Classifier",
+          "success": true,
+          "output": "## Regime: RANGING\n\nPrice trend at +0.05% (below ±0.2% threshold). Bollinger position cycling between 25-75% over last 30 minutes. No sustained directional movement.\n\n**Confidence:** 85%\n\n**Session:** Asia (low volatility expected)\n\n**CxU basis:** [regime-ranging](1220e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4) defines ranging as price bounded within ±0.2% trend.",
+          "metrics": {
+            "modelName": "claude-opus-4-6",
+            "temperature": 0.05,
+            "promptTokens": 2400,
+            "outputTokens": 180,
+            "totalTokens": 2580,
+            "executionTimeMs": 1850
+          },
+          "cxuList": [
+            {
+              "cxu_id": "1220e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
+              "alias": "regime-ranging"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "name": "Signal Assessment",
+      "agents": [
+        {
+          "agentId": "signal-assessor",
+          "agentName": "Signal Assessor",
+          "success": true,
+          "output": "## Signal Assessment\n\n**Direct feed:** 487 signals analyzed across 16 types.\n\n**Consensus:** 58% LONG (below 75% threshold for RANGING regime per [playbook-ranging](1220b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7)).\n\n**Top signals:**\n- onchain-flow@15m: LONG, conf=0.72, historical=93%\n- vwap@5m: LONG, conf=0.61, historical=69%\n\n**Blocked:** basis (7% accuracy), bb-reversal (7% accuracy) per [learning-signal-accuracy-by-type](1220e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0).\n\n**AGDEL purchased:** 2 signals (onchain-flow@15m LONG, technical@5m NEUTRAL).\n\n**Recommendation:** HOLD — consensus does not meet threshold.",
+          "metrics": {
+            "modelName": "claude-opus-4-6",
+            "temperature": 0.05,
+            "promptTokens": 8200,
+            "outputTokens": 320,
+            "totalTokens": 8520,
+            "executionTimeMs": 2100
+          },
+          "cxuList": [
+            {
+              "cxu_id": "1220b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7",
+              "alias": "playbook-ranging"
+            },
+            {
+              "cxu_id": "1220e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0",
+              "alias": "learning-signal-accuracy-by-type"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": 3,
+      "name": "Trade Decision",
+      "agents": [
+        {
+          "agentId": "trade-decider",
+          "agentName": "Trade Decider",
+          "success": true,
+          "output": "## Decision: HOLD\n\n**Reasoning:**\n1. Regime is RANGING — applying [playbook-ranging](1220b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7)\n2. Signal consensus at 58% — below 75% threshold\n3. Price at 42% of Bollinger range — not at entry zone (<15% for long)\n4. Per [axiom-hold-default](1220b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1): holding is correct ~80% of the time\n5. Per [axiom-fee-kill](1220a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0): no clear $13+ edge available\n\n**Action:** HOLD\n**Confidence:** 92%\n**Trades today:** 1 (below 3/day limit)",
+          "metrics": {
+            "modelName": "claude-opus-4-6",
+            "temperature": 0.02,
+            "promptTokens": 4800,
+            "outputTokens": 250,
+            "totalTokens": 5050,
+            "executionTimeMs": 1650
+          },
+          "cxuList": [
+            {
+              "cxu_id": "1220b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7",
+              "alias": "playbook-ranging"
+            },
+            {
+              "cxu_id": "1220b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
+              "alias": "axiom-hold-default"
+            },
+            {
+              "cxu_id": "1220a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0",
+              "alias": "axiom-fee-kill"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "regime": "ranging",
+    "decision": "hold",
+    "confidence": 0.92,
+    "signalConsensus": 0.58,
+    "tradesToday": 1,
+    "activeCxus": 11,
+    "netPnl": 8.50
+  }
+}

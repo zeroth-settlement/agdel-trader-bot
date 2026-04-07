@@ -1,0 +1,53 @@
+{
+  "alias": "axiom-max-size-or-skip",
+  "cxu_id": "1220d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
+  "cxu_object": {
+    "claim": "Position sizing must be maximum size or no trade because small positions are eaten by the fixed fee structure and partial decreases cost more in fees than simply holding through drawdowns",
+    "supporting_contexts": [
+      {
+        "text": "Max size or no trade — small positions eaten by fees. Either commit fully or wait. No decreasing positions — fee cost of decrease plus re-enter is worse than holding through the drawdown.",
+        "line": null
+      },
+      {
+        "text": "Signal consensus strategy used max size (1.0) as its position size. Selectivity IS the risk management. This produced the best consistent performance at plus eleven dollars and sixty-two cents with only 2-3 trades per day.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "axiom",
+      "claim_type": "requirement",
+      "keywords": ["position sizing", "max size", "fees", "partial positions", "selectivity"],
+      "tags": ["hl-trading", "tier:axiom", "cxu_class:hypothesis", "approval:human", "agdel-trader-bot"],
+      "evidence_strength": "strong",
+      "quality_metrics": {
+        "confidence_score": 0.92,
+        "specificity_score": 0.88,
+        "completeness_score": 0.85,
+        "standalone_score": 0.90
+      },
+      "hierarchy": {
+        "document_type": "guide",
+        "document_id": "agdel-trading-wiki",
+        "document_title": "AgDel Trading Wiki — One Week Intensive Results",
+        "topic": "Position Management",
+        "section": "What Works",
+        "subsection": null,
+        "page_number": null
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "trading-wiki-extraction",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Axiom: binary sizing (full or zero) outperforms partial positions due to fee structure",
+    "prior_cxu_id": null,
+    "source": "agdel-trading-wiki/strategies/signal-consensus.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:axiom", "cxu_class:hypothesis", "approval:human", "agdel-trader-bot"]
+  }
+}

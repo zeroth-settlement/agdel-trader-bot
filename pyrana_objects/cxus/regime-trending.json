@@ -1,0 +1,69 @@
+{
+  "alias": "regime-trending",
+  "cxu_id": "1220f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5",
+  "cxu_object": {
+    "claim": "A trending market regime is identified by sustained directional price movement exceeding plus or minus zero point two percent with higher highs and higher lows for uptrends or lower highs and lower lows for downtrends occurring approximately thirty to forty percent of the time",
+    "supporting_contexts": [
+      {
+        "text": "Trending: sustained directional moves, higher highs/lows or lower highs/lows. 30-40% of time. Trend threshold: greater than ±0.2% over measurement window. Europe open (08:00-12:00 UTC) often triggers regime transitions from ranging to trending.",
+        "line": null
+      },
+      {
+        "text": "Trend Following strategy achieved plus six dollars to plus fifty-five dollars depending on period, performing best in sustained uptrends. Weakness: gets chopped in ranging markets and loses value during regime transitions.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "axiom",
+      "claim_type": "definition",
+      "keywords": ["trending", "regime", "directional", "higher highs", "momentum"],
+      "tags": ["hl-trading", "tier:regime-model", "cxu_class:hypothesis", "approval:human", "agdel-trader-bot"],
+      "evidence_strength": "strong",
+      "quality_metrics": {
+        "confidence_score": 0.88,
+        "specificity_score": 0.88,
+        "completeness_score": 0.85,
+        "standalone_score": 0.92
+      },
+      "hierarchy": {
+        "document_type": "guide",
+        "document_id": "agdel-trading-wiki",
+        "document_title": "AgDel Trading Wiki — One Week Intensive Results",
+        "topic": "Market Regimes",
+        "section": "Regime Classification",
+        "subsection": "Trending",
+        "page_number": null
+      }
+    },
+    "parameters": {
+      "trendThresholdPct": {
+        "value": 0.2,
+        "min": 0.05,
+        "max": 0.5,
+        "step": 0.05,
+        "description": "Minimum absolute price trend percentage to classify as trending"
+      },
+      "frequencyPct": {
+        "value": 35,
+        "min": 15,
+        "max": 60,
+        "step": 5,
+        "description": "Expected percentage of time market spends in trending regime"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "trading-wiki-extraction",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Initial regime model for trending markets based on one week ETH-USD observation",
+    "prior_cxu_id": null,
+    "source": "agdel-trading-wiki/regimes/classification.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:regime-model", "cxu_class:hypothesis", "approval:human", "agdel-trader-bot"]
+  }
+}

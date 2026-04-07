@@ -1,0 +1,319 @@
+/* ============================================================
+   PYRANA DESIGN SYSTEM — Utilities
+   ============================================================
+   Requires: pyrana-theme.css loaded first.
+   Layout helpers, typography classes, and animations.
+   ============================================================ */
+
+/* ---- Page Layout ---------------------------------------- */
+
+.py-page {
+  display: flex;
+  min-height: 100vh;
+}
+
+.py-page-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.py-container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--py-space-8);
+}
+
+.py-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: hsl(var(--py-bg));
+  border-bottom: 1px solid hsl(var(--py-border));
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.py-sticky-sidebar {
+  position: sticky;
+  top: var(--py-space-4);
+  max-height: calc(100vh - var(--py-space-8));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+
+/* ---- Flexbox Helpers ------------------------------------ */
+
+.py-flex          { display: flex; }
+.py-flex-col      { display: flex; flex-direction: column; }
+.py-flex-center   { display: flex; align-items: center; justify-content: center; }
+.py-flex-between  { display: flex; align-items: center; justify-content: space-between; }
+.py-flex-start    { display: flex; align-items: center; justify-content: flex-start; }
+.py-flex-end      { display: flex; align-items: center; justify-content: flex-end; }
+.py-flex-wrap     { flex-wrap: wrap; }
+.py-flex-1        { flex: 1; min-width: 0; }
+.py-flex-none     { flex: none; }
+
+.py-gap-1  { gap: var(--py-space-1); }
+.py-gap-2  { gap: var(--py-space-2); }
+.py-gap-3  { gap: var(--py-space-3); }
+.py-gap-4  { gap: var(--py-space-4); }
+.py-gap-6  { gap: var(--py-space-6); }
+.py-gap-8  { gap: var(--py-space-8); }
+
+
+/* ---- Grid ----------------------------------------------- */
+
+.py-grid {
+  display: grid;
+  gap: var(--py-space-4);
+}
+
+.py-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.py-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.py-grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 768px) {
+  .py-grid-2, .py-grid-3, .py-grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .py-grid-3, .py-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+
+/* ---- Spacing -------------------------------------------- */
+
+.py-p-0  { padding: 0; }
+.py-p-1  { padding: var(--py-space-1); }
+.py-p-2  { padding: var(--py-space-2); }
+.py-p-3  { padding: var(--py-space-3); }
+.py-p-4  { padding: var(--py-space-4); }
+.py-p-6  { padding: var(--py-space-6); }
+.py-p-8  { padding: var(--py-space-8); }
+
+.py-px-4 { padding-left: var(--py-space-4); padding-right: var(--py-space-4); }
+.py-py-2 { padding-top: var(--py-space-2); padding-bottom: var(--py-space-2); }
+.py-py-4 { padding-top: var(--py-space-4); padding-bottom: var(--py-space-4); }
+
+.py-m-0  { margin: 0; }
+.py-mb-1 { margin-bottom: var(--py-space-1); }
+.py-mb-2 { margin-bottom: var(--py-space-2); }
+.py-mb-3 { margin-bottom: var(--py-space-3); }
+.py-mb-4 { margin-bottom: var(--py-space-4); }
+.py-mb-6 { margin-bottom: var(--py-space-6); }
+.py-mb-8 { margin-bottom: var(--py-space-8); }
+.py-mt-4 { margin-top: var(--py-space-4); }
+.py-mt-6 { margin-top: var(--py-space-6); }
+
+
+/* ---- Typography ----------------------------------------- */
+
+.py-text-xs     { font-size: 0.75rem;   line-height: 1rem; }
+.py-text-sm     { font-size: 0.8125rem; line-height: 1.25rem; }
+.py-text-base   { font-size: 0.875rem;  line-height: 1.5; }
+.py-text-lg     { font-size: 1rem;      line-height: 1.5; }
+.py-text-xl     { font-size: 1.25rem;   line-height: 1.75rem; }
+.py-text-2xl    { font-size: 1.5rem;    line-height: 2rem; }
+.py-text-3xl    { font-size: 2.25rem;   line-height: 2.5rem; }
+
+.py-text-bold   { font-weight: 700; }
+.py-text-semibold { font-weight: 600; }
+.py-text-medium { font-weight: 500; }
+.py-text-normal { font-weight: 400; }
+.py-text-light  { font-weight: 300; }
+
+.py-text-mono   { font-family: var(--py-font-mono); }
+
+.py-text-center { text-align: center; }
+.py-text-right  { text-align: right; }
+
+/* Descriptor (uppercase label style) */
+.py-descriptor {
+  font-weight: 700;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Text color helpers */
+.py-text-heading { color: hsl(var(--py-fg-heading)); }
+.py-text-muted   { color: hsl(var(--py-fg-muted)); }
+.py-text-primary { color: hsl(var(--py-primary)); }
+.py-text-success { color: hsl(var(--py-success)); }
+.py-text-warning { color: hsl(var(--py-warning)); }
+.py-text-error   { color: hsl(var(--py-error)); }
+
+/* Feature text colors */
+.py-text-cxu      { color: var(--py-cxu-text); }
+.py-text-prompt   { color: var(--py-prompt-text); }
+.py-text-script   { color: var(--py-script-text); }
+.py-text-skill    { color: var(--py-skill-text); }
+.py-text-agent    { color: var(--py-agent-text); }
+.py-text-data     { color: var(--py-data-text); }
+.py-text-workflow { color: var(--py-workflow-text); }
+.py-text-ai       { color: var(--py-ai-text); }
+
+/* Truncation */
+.py-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.py-line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+
+/* ---- Background Helpers --------------------------------- */
+
+.py-bg-subtle    { background: hsl(var(--py-bg-subtle)); }
+.py-bg-muted     { background: hsl(var(--py-muted)); }
+.py-bg-card      { background: hsl(var(--py-card)); }
+.py-bg-gradient  { background: var(--py-gradient-surface); }
+
+
+/* ---- Border Helpers ------------------------------------- */
+
+.py-border       { border: 1px solid hsl(var(--py-border)); }
+.py-border-b     { border-bottom: 1px solid hsl(var(--py-border)); }
+.py-border-t     { border-top: 1px solid hsl(var(--py-border)); }
+.py-rounded      { border-radius: var(--py-radius); }
+.py-rounded-lg   { border-radius: var(--py-radius-lg); }
+.py-rounded-full { border-radius: var(--py-radius-full); }
+
+
+/* ---- Visibility ----------------------------------------- */
+
+.py-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  border: 0;
+}
+
+.py-hidden { display: none; }
+
+
+/* ---- Overflow ------------------------------------------- */
+
+.py-overflow-auto     { overflow: auto; }
+.py-overflow-hidden   { overflow: hidden; }
+.py-overflow-x-auto   { overflow-x: auto; }
+.py-overflow-y-auto   { overflow-y: auto; }
+
+
+/* ---- Logo Utilities ------------------------------------- */
+
+.py-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex: none;
+}
+
+.py-logo-sm  { width: 20px; height: 20px; }
+.py-logo-md  { width: 28px; height: 28px; }
+.py-logo-lg  { width: 40px; height: 40px; }
+.py-logo-xl  { width: 56px; height: 56px; }
+
+
+/* ---- Icon Sizes ----------------------------------------- */
+
+.py-icon-xs  { width: 12px; height: 12px; }
+.py-icon-sm  { width: 16px; height: 16px; }
+.py-icon-md  { width: 20px; height: 20px; }
+.py-icon-lg  { width: 24px; height: 24px; }
+.py-icon-xl  { width: 32px; height: 32px; }
+
+
+/* ---- Animations ----------------------------------------- */
+
+@keyframes py-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes py-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+@keyframes py-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes py-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes py-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes py-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.py-animate-spin     { animation: py-spin 1s linear infinite; }
+.py-animate-pulse    { animation: py-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+.py-animate-fade-in  { animation: py-fade-in 0.2s ease-out; }
+.py-animate-slide-up { animation: py-slide-up 0.2s ease-out; }
+.py-animate-shimmer  {
+  background: linear-gradient(90deg, transparent 0%, hsl(var(--py-muted)) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: py-shimmer 2s linear infinite;
+}
+
+
+/* ---- Scrollbar Styling ---------------------------------- */
+
+.py-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.py-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.py-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--py-border));
+  border-radius: 3px;
+}
+
+.py-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--py-fg-muted));
+}
+
+
+/* ---- Print --------------------------------------------- */
+
+@media print {
+  .py-sidebar,
+  .py-no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+}

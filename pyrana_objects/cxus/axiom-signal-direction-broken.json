@@ -1,0 +1,53 @@
+{
+  "alias": "axiom-signal-direction-broken",
+  "cxu_id": "1220c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+  "cxu_object": {
+    "claim": "Signal direction predictions are structurally broken at approximately fifty percent accuracy across all signal types making them equivalent to a coin flip for directional trading decisions",
+    "supporting_contexts": [
+      {
+        "text": "8,000+ settled predictions analyzed across all signal types. NOTHING above 50% accuracy on direction. Best performer: onchain-flow@1h at 49.9% accuracy. Worst: bb-reversal@1m at 5% accuracy (worse than random).",
+        "line": null
+      },
+      {
+        "text": "Root cause identified: Symmetric range derivation. Direction was derived from whether the range center was above or below current price, making it structurally random. Use price action over signals for direction — signals provide range and confidence, not reliable direction.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "axiom",
+      "claim_type": "finding",
+      "keywords": ["signal accuracy", "direction", "coin flip", "symmetric range", "price action"],
+      "tags": ["hl-trading", "tier:axiom", "cxu_class:hypothesis", "approval:human", "agdel-trader-bot"],
+      "evidence_strength": "very_strong",
+      "quality_metrics": {
+        "confidence_score": 0.99,
+        "specificity_score": 0.92,
+        "completeness_score": 0.90,
+        "standalone_score": 0.94
+      },
+      "hierarchy": {
+        "document_type": "guide",
+        "document_id": "agdel-trading-wiki",
+        "document_title": "AgDel Trading Wiki — One Week Intensive Results",
+        "topic": "Signal Analysis",
+        "section": "Signal Direction Accuracy",
+        "subsection": null,
+        "page_number": null
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "trading-wiki-extraction",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Critical axiom: signals are coin flips for direction, validated across 8,000+ predictions",
+    "prior_cxu_id": null,
+    "source": "agdel-trading-wiki/signals/accuracy.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:axiom", "cxu_class:hypothesis", "approval:human", "agdel-trader-bot"]
+  }
+}

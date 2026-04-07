@@ -1,0 +1,20 @@
+node_modules/
+dist/
+logs/
+.env
+.DS_Store
+*.log
+
+# Pyrana exports (generated output files)
+data/exports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/

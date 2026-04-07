@@ -1,0 +1,88 @@
+{
+  "alias": "playbook-ranging",
+  "cxu_id": "1220b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7",
+  "cxu_object": {
+    "claim": "In ranging market regimes the optimal strategy is mean reversion entering long at the lower fifteen percent of the Bollinger band range and short at the upper eighty-five percent with maximum position size and a target of two to three trades per day",
+    "supporting_contexts": [
+      {
+        "text": "Mean Reversion in ranging: buy at lower Bollinger band (<15% of range), sell at upper (>85%). Take profit when price returns to mean (40-60% zone). Peak performance: +$18 in stable ranging period. Critical failure: pyramiding disaster when price trends down, kept adding at 0% of range and lost -$23.",
+        "line": null
+      },
+      {
+        "text": "Regime-adaptive playbook for RANGING: execute mean reversion strategy with max position size. Consensus threshold 75% of signals must agree. Maximum 2-3 entries per day to keep fee drag under $6.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "prescribed",
+      "claim_type": "procedure",
+      "keywords": ["ranging", "mean reversion", "Bollinger band", "position size", "playbook"],
+      "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"],
+      "evidence_strength": "strong",
+      "quality_metrics": {
+        "confidence_score": 0.85,
+        "specificity_score": 0.92,
+        "completeness_score": 0.88,
+        "standalone_score": 0.90
+      }
+    },
+    "parameters": {
+      "entryLowPct": {
+        "value": 15,
+        "min": 5,
+        "max": 30,
+        "step": 5,
+        "description": "Bollinger band percentile for long entry"
+      },
+      "entryHighPct": {
+        "value": 85,
+        "min": 70,
+        "max": 95,
+        "step": 5,
+        "description": "Bollinger band percentile for short entry"
+      },
+      "tpZoneLowPct": {
+        "value": 40,
+        "min": 30,
+        "max": 50,
+        "step": 5,
+        "description": "Lower bound of take-profit zone (mean reversion target)"
+      },
+      "tpZoneHighPct": {
+        "value": 60,
+        "min": 50,
+        "max": 70,
+        "step": 5,
+        "description": "Upper bound of take-profit zone (mean reversion target)"
+      },
+      "maxTradesPerDay": {
+        "value": 3,
+        "min": 1,
+        "max": 8,
+        "step": 1,
+        "description": "Maximum number of entries per day in ranging regime"
+      },
+      "consensusThresholdPct": {
+        "value": 75,
+        "min": 50,
+        "max": 95,
+        "step": 5,
+        "description": "Minimum percentage of signals that must agree before entry"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "trading-wiki-extraction",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Initial ranging playbook from regime-adaptive strategy results",
+    "prior_cxu_id": null,
+    "source": "agdel-trading-wiki/strategies/regime-adaptive.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"]
+  }
+}

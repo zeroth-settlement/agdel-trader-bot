@@ -1,0 +1,310 @@
+/* ============================================================
+   PYRANA DESIGN SYSTEM — Theme & Design Tokens
+   ============================================================
+   Usage: Link this file first, then pyrana-components.css.
+   Themes: Add class="dark" to <html> or <body> for dark mode.
+   All colors use HSL via CSS custom properties for composability.
+   ============================================================ */
+
+/* ----- Light Theme (Default) ----- */
+:root {
+  /* Core surfaces */
+  --py-bg:               0 0% 100%;       /* #FFFFFF */
+  --py-bg-subtle:        210 20% 98%;     /* #F8FAFC */
+  --py-fg:               0 0% 20%;        /* #333333 */
+  --py-fg-heading:       0 0% 0%;         /* #000000 */
+  --py-fg-muted:         210 12% 64%;     /* #98A0AB */
+
+  /* Cards & panels */
+  --py-card:             0 0% 100%;
+  --py-card-fg:          0 0% 20%;
+  --py-card-shadow:      0 1px 2px rgba(0,0,0,0.05);
+  --py-surface-subtle:   210 6% 92%;      /* #EAECEE */
+
+  /* Primary (Pyrana Blue — focus rings, links, CTAs) */
+  --py-primary:          221 87% 60%;     /* #3A7FF2 */
+  --py-primary-fg:       0 0% 100%;
+
+  /* Secondary (neutral buttons) */
+  --py-secondary:        0 0% 97%;
+  --py-secondary-fg:     0 0% 20%;
+
+  /* Muted (subtle surfaces, disabled) */
+  --py-muted:            0 0% 96%;
+  --py-muted-fg:         210 12% 64%;
+
+  /* Accent (hover highlights) */
+  --py-accent:           221 87% 95%;
+  --py-accent-fg:        221 87% 40%;
+
+  /* Borders */
+  --py-border:           220 14% 91%;     /* ~#E5E7EB */
+  --py-input:            226 19% 90%;
+  --py-ring:             221 87% 60%;
+
+  /* Sidebar (always dark) */
+  --py-sidebar-bg:       0 0% 0%;
+  --py-sidebar-fg:       0 0% 100%;
+  --py-sidebar-border:   0 0% 15%;
+  --py-sidebar-accent:   0 0% 10%;
+
+  /* Semantic status */
+  --py-success:          142 76% 36%;     /* #22C55E */
+  --py-success-light:    142 76% 95%;
+  --py-success-fg:       0 0% 100%;
+
+  --py-warning:          20 87% 60%;      /* #F17F42 */
+  --py-warning-light:    20 87% 96%;
+  --py-warning-fg:       0 0% 100%;
+
+  --py-error:            0 84% 60%;       /* #EF4444 */
+  --py-error-light:      0 84% 95%;
+  --py-error-fg:         0 0% 100%;
+
+  --py-info:             221 87% 60%;     /* #3B82F6 */
+  --py-info-light:       221 87% 95%;
+  --py-info-fg:          0 0% 100%;
+
+  /* Gradients */
+  --py-gradient-surface: linear-gradient(180deg, #EEF6FF 0%, #E2EEFF 100%);
+
+  /* Radius */
+  --py-radius:           0.5rem;          /* 8px */
+  --py-radius-md:        0.375rem;        /* 6px */
+  --py-radius-sm:        0.25rem;         /* 4px */
+  --py-radius-lg:        0.75rem;         /* 12px */
+  --py-radius-full:      9999px;
+
+  /* Typography */
+  --py-font-sans:        ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --py-font-heading:     var(--py-font-sans);
+  --py-font-mono:        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Spacing scale (4px base) */
+  --py-space-1:  0.25rem;   /* 4px  */
+  --py-space-2:  0.5rem;    /* 8px  */
+  --py-space-3:  0.75rem;   /* 12px */
+  --py-space-4:  1rem;      /* 16px */
+  --py-space-5:  1.25rem;   /* 20px */
+  --py-space-6:  1.5rem;    /* 24px */
+  --py-space-8:  2rem;      /* 32px */
+  --py-space-10: 2.5rem;    /* 40px */
+  --py-space-12: 3rem;      /* 48px */
+
+  /* Transitions */
+  --py-transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --py-transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --py-transition-slow:   300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Alpha tokens (for composable opacity patterns) */
+  --py-alpha-subtle:     0.08;
+  --py-alpha-border:     0.30;
+  --py-alpha-hover:      0.10;
+}
+
+
+/* ----- Dark Theme ----- */
+.dark {
+  --py-bg:               0 0% 7%;         /* #121212 */
+  --py-bg-subtle:        213 15% 10%;     /* #161A1F */
+  --py-fg:               0 0% 88%;        /* #E0E0E0 */
+  --py-fg-heading:       0 0% 100%;
+  --py-fg-muted:         220 8% 72%;
+
+  --py-card:             213 15% 14%;     /* ~#1E2227 */
+  --py-card-fg:          0 0% 88%;
+  --py-card-shadow:      0 1px 3px rgba(0,0,0,0.3);
+  --py-surface-subtle:   210 6% 20%;
+
+  --py-primary:          221 87% 60%;
+  --py-primary-fg:       0 0% 100%;
+
+  --py-secondary:        0 0% 20%;
+  --py-secondary-fg:     0 0% 88%;
+
+  --py-muted:            210 10% 18%;
+  --py-muted-fg:         220 8% 72%;
+
+  --py-accent:           221 87% 20%;
+  --py-accent-fg:        0 0% 100%;
+
+  --py-border:           0 0% 20%;        /* #323232 */
+  --py-input:            0 0% 20%;
+  --py-ring:             221 87% 60%;
+
+  --py-sidebar-bg:       0 0% 10%;
+  --py-sidebar-fg:       0 0% 100%;
+  --py-sidebar-border:   0 0% 18%;
+  --py-sidebar-accent:   0 0% 15%;
+
+  --py-success:          142 70% 45%;
+  --py-success-light:    142 70% 12%;
+
+  --py-warning:          20 87% 60%;
+  --py-warning-light:    20 87% 12%;
+
+  --py-error:            0 63% 31%;
+  --py-error-light:      0 63% 12%;
+
+  --py-info:             221 87% 60%;
+  --py-info-light:       221 87% 12%;
+
+  --py-gradient-surface: linear-gradient(180deg, #1A2B4B 0%, #0F172A 100%);
+}
+
+
+/* ============================================================
+   Feature Color Tokens
+   Each Pyrana object type has a consistent color identity.
+   ============================================================ */
+:root {
+  /* CxU — Blue */
+  --py-cxu:             59 130 246;       /* #3B82F6 */
+  --py-cxu-bg:          rgba(59,130,246, 0.10);
+  --py-cxu-border:      rgba(59,130,246, 0.30);
+  --py-cxu-text:        #3B82F6;
+
+  /* Prompt — Purple */
+  --py-prompt:          168 85 247;       /* #A855F7 */
+  --py-prompt-bg:       rgba(168,85,247, 0.10);
+  --py-prompt-border:   rgba(168,85,247, 0.30);
+  --py-prompt-text:     #A855F7;
+
+  /* Script — Indigo */
+  --py-script:          99 102 241;       /* #6366F1 */
+  --py-script-bg:       rgba(99,102,241, 0.10);
+  --py-script-border:   rgba(99,102,241, 0.30);
+  --py-script-text:     #6366F1;
+
+  /* Skill — Orange */
+  --py-skill:           249 115 22;       /* #F97316 */
+  --py-skill-bg:        rgba(249,115,22, 0.10);
+  --py-skill-border:    rgba(249,115,22, 0.30);
+  --py-skill-text:      #F97316;
+
+  /* Agent — Emerald */
+  --py-agent:           34 197 94;        /* #22C55E */
+  --py-agent-bg:        rgba(34,197,94, 0.10);
+  --py-agent-border:    rgba(34,197,94, 0.30);
+  --py-agent-text:      #22C55E;
+
+  /* Data — Amber */
+  --py-data:            245 158 11;       /* #F59E0B */
+  --py-data-bg:         rgba(245,158,11, 0.10);
+  --py-data-border:     rgba(245,158,11, 0.30);
+  --py-data-text:       #F59E0B;
+
+  /* Workflow — Cyan */
+  --py-workflow:        6 182 212;        /* #06B6D4 */
+  --py-workflow-bg:     rgba(6,182,212, 0.10);
+  --py-workflow-border: rgba(6,182,212, 0.30);
+  --py-workflow-text:   #06B6D4;
+
+  /* AI — Violet */
+  --py-ai:             139 92 246;        /* #8B5CF6 */
+  --py-ai-bg:          rgba(139,92,246, 0.10);
+  --py-ai-border:      rgba(139,92,246, 0.30);
+  --py-ai-text:        #8B5CF6;
+}
+
+/* Dark mode adjustments — slightly brighter feature colors */
+.dark {
+  --py-cxu-text:        #60A5FA;
+  --py-prompt-text:     #C084FC;
+  --py-script-text:     #818CF8;
+  --py-skill-text:      #FB923C;
+  --py-agent-text:      #4ADE80;
+  --py-data-text:       #FBBF24;
+  --py-workflow-text:   #22D3EE;
+  --py-ai-text:         #A78BFA;
+}
+
+
+/* ============================================================
+   Brand Color Scales (for detailed use)
+   ============================================================ */
+:root {
+  /* Emerald (Primary Brand Green) */
+  --py-emerald-50:  #f0fdf4;
+  --py-emerald-100: #dcfce7;
+  --py-emerald-200: #bbf7d0;
+  --py-emerald-300: #86efac;
+  --py-emerald-400: #4ade80;
+  --py-emerald-500: #22c55e;
+  --py-emerald-600: #16a34a;
+  --py-emerald-700: #15803d;
+  --py-emerald-800: #166534;
+  --py-emerald-900: #14532d;
+  --py-emerald-950: #052e16;
+
+  /* Purple (AI/Accent) */
+  --py-purple-50:   #faf5ff;
+  --py-purple-100:  #f3e8ff;
+  --py-purple-200:  #e9d5ff;
+  --py-purple-300:  #d8b4fe;
+  --py-purple-400:  #c084fc;
+  --py-purple-500:  #a855f7;
+  --py-purple-600:  #9333ea;
+  --py-purple-700:  #7c3aed;
+  --py-purple-800:  #6b21a8;
+  --py-purple-900:  #581c87;
+  --py-purple-950:  #3b0764;
+
+  /* Logo Coral/Orange */
+  --py-coral:       #ED7445;
+
+  /* Patrick Legacy */
+  --py-patrick-teal:      #109B9B;
+  --py-patrick-deep-blue: #002333;
+  --py-patrick-gray-mist: #B4B9C7;
+  --py-patrick-light-teal:#D3E8E7;
+}
+
+
+/* ============================================================
+   Base Reset (optional — include if not using your own)
+   ============================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--py-font-sans);
+  font-size: 0.875rem;        /* 14px */
+  line-height: 1.5;
+  color: hsl(var(--py-fg));
+  background-color: hsl(var(--py-bg));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: hsl(var(--py-fg-heading));
+  font-family: var(--py-font-heading);
+  margin: 0;
+  line-height: 1.2;
+}
+
+h1 { font-weight: 700; font-size: 2.25rem; }
+h2 { font-weight: 600; font-size: 1.5rem; }
+h3 { font-weight: 600; font-size: 1.25rem; }
+h4 { font-weight: 600; font-size: 1.125rem; }
+h5 { font-weight: 600; font-size: 1rem; }
+h6 { font-weight: 600; font-size: 0.875rem; }
+
+a {
+  color: hsl(var(--py-primary));
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+code, pre {
+  font-family: var(--py-font-mono);
+}
+
+::selection {
+  background: hsl(var(--py-primary) / 0.2);
+}

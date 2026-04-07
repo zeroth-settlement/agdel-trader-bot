@@ -1,0 +1,54 @@
+{
+  "alias": "learning-strategy-performance",
+  "cxu_id": "1220f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1",
+  "cxu_object": {
+    "claim": "Regime-adaptive strategy achieved the best paper performance at plus one hundred forty-one dollars while signal consensus was the best consistent live performer at plus eleven dollars and sixty-two cents and funding fade was the worst at negative two hundred forty-five dollars",
+    "supporting_contexts": [
+      {
+        "text": "Regime-Adaptive: +$141 paper (best single period). Signal Consensus: +$11.62 arena (best consistent performer, 2-3 trades/day). Trend Following: +$6 to +$55 depending on period. Funding Fade: -$245 loss in arena (worst performer, avoid).",
+        "line": null
+      },
+      {
+        "text": "Scalp Bands: -$30 to -$80 (fee destruction, 20-30 trades/day). Edge Detection: -$15 to -$40 daily fee drag (15-25 trades/day). Mean Reversion: +$18 peak but suffered pyramiding disaster at -$23. Simplicity beats complexity.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "finding",
+      "keywords": ["strategy performance", "regime-adaptive", "signal consensus", "funding fade", "scalp bands"],
+      "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"],
+      "evidence_strength": "strong",
+      "quality_metrics": {
+        "confidence_score": 0.88,
+        "specificity_score": 0.95,
+        "completeness_score": 0.90,
+        "standalone_score": 0.92
+      }
+    },
+    "parameters": {
+      "avoidStrategies": {
+        "value": "funding-fade,scalp-bands,edge-detection",
+        "description": "Strategies proven to lose money — never use these"
+      },
+      "preferredStrategies": {
+        "value": "regime-adaptive,signal-consensus",
+        "description": "Strategies with positive historical performance"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "reflector-agent",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Initial strategy performance assessment from one week live + arena trading",
+    "prior_cxu_id": null,
+    "source": "agdel-trading-wiki/trades/live-trading-results.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"]
+  }
+}

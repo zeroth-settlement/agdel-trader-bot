@@ -1,0 +1,201 @@
+{
+  "name": "AgDel Trader Bot",
+  "tag": "agdel-trader-bot",
+  "description": "CxU-driven autonomous trading agent for ETH-USD on Hyperliquid. Uses Context Units as an active learning knowledge repository to evolve trading strategies through structured reflection, regime classification, and signal quality assessment.",
+  "version": "0.1.0",
+  "services": {
+    "cxu_manager": "http://localhost:8001",
+    "script_manager": "http://localhost:8002",
+    "prompt_manager": "http://localhost:8003",
+    "agent_manager": "http://localhost:8105"
+  },
+  "dashboard": {
+    "bridgeUrl": "http://localhost:9002",
+    "tradingServerUrl": "http://localhost:9004",
+    "signalBotUrl": "http://localhost:9502",
+    "tabs": [
+      {
+        "id": "trading",
+        "label": "Trading",
+        "icon": "chart-line",
+        "description": "Live market view with regime-aware CxU-driven decisions"
+      },
+      {
+        "id": "signals",
+        "label": "Signals",
+        "icon": "broadcast",
+        "description": "Dual signal feeds: AGDEL marketplace + direct signal bot"
+      },
+      {
+        "id": "knowledge",
+        "label": "Knowledge",
+        "icon": "brain",
+        "description": "CxU knowledge base — the agent's evolving brain"
+      },
+      {
+        "id": "trades",
+        "label": "Trades",
+        "icon": "receipt",
+        "description": "Trade history with full CxU citation chain"
+      },
+      {
+        "id": "reflection",
+        "label": "Reflection",
+        "icon": "lightbulb",
+        "description": "Learning loop: CxU evolution, before/after performance"
+      },
+      {
+        "id": "agent-output",
+        "label": "Agent Output",
+        "icon": "terminal",
+        "description": "Raw agent outputs with metadata"
+      }
+    ],
+    "kpiLayout": [
+      {
+        "id": "pnl",
+        "label": "Net P&L",
+        "format": "currency",
+        "source": "portfolio.pnl"
+      },
+      {
+        "id": "regime",
+        "label": "Market Regime",
+        "format": "badge",
+        "source": "regime.current"
+      },
+      {
+        "id": "playbook",
+        "label": "Active Playbook",
+        "format": "text",
+        "source": "strategy.activePlaybook"
+      },
+      {
+        "id": "winRate",
+        "label": "Win Rate",
+        "format": "percent",
+        "source": "performance.winRate"
+      },
+      {
+        "id": "cxuCount",
+        "label": "Active CxUs",
+        "format": "number",
+        "source": "knowledge.activeCxuCount"
+      },
+      {
+        "id": "feeDrag",
+        "label": "Fee Drag",
+        "format": "currency",
+        "source": "performance.totalFees"
+      }
+    ]
+  },
+  "cxuTiers": {
+    "axioms": {
+      "description": "Core trading truths validated through experience. Human-locked.",
+      "approval": "human",
+      "tags": ["cxu_class:hypothesis", "approval:human", "tier:axiom"],
+      "examples": [
+        "Fees kill: minimum $13 round-trip edge required per trade",
+        "Hold is correct 80% of the time",
+        "Signal direction accuracy is structurally ~50%"
+      ]
+    },
+    "regime_models": {
+      "description": "Market regime definitions and classification criteria. Human-locked.",
+      "approval": "human",
+      "tags": ["cxu_class:hypothesis", "approval:human", "tier:regime-model"],
+      "examples": [
+        "Ranging: price bounded ±0.2%, 40-50% of time",
+        "Trending: sustained directional, higher highs/lows, 30-40% of time"
+      ]
+    },
+    "playbooks": {
+      "description": "Strategy parameters per regime. Agent-adjustable within bounds.",
+      "approval": "agent",
+      "tags": ["cxu_class:parameter", "approval:agent", "tier:playbook"],
+      "examples": [
+        "Ranging playbook: mean-revert, max size, 2-3 trades/day",
+        "Signal consensus threshold: 75%"
+      ]
+    },
+    "learnings": {
+      "description": "Observed patterns from trade outcomes. Agent-created, human-reviewable.",
+      "approval": "agent",
+      "tags": ["cxu_class:parameter", "approval:agent", "tier:learning"],
+      "examples": [
+        "momentum-signal: 53% in ranging, 61% in trending",
+        "Funding fade strategy: -$245, avoid"
+      ]
+    }
+  },
+  "integrations": {
+    "hyperliquid": {
+      "asset": "ETH",
+      "infoUrl": "https://api.hyperliquid.xyz/info",
+      "takerFeePct": 0.000432,
+      "minOrderUsd": 11
+    },
+    "agdelMarketplace": {
+      "description": "Selective, high-quality purchased signals for confirming big trades",
+      "budget": {
+        "maxPerSignalUsdc": 2.0,
+        "maxHourlyUsdc": 50.0,
+        "maxDailyUsdc": 250.0
+      }
+    },
+    "signalBot": {
+      "description": "High-volume direct feed (~500 signals/tick) for insights and signal quality assessment",
+      "defaultUrl": "http://localhost:9502",
+      "pollIntervalSeconds": 10
+    }
+  },
+  "agents": [
+    {
+      "id": "regime-classifier",
+      "name": "Regime Classifier",
+      "description": "Classifies current market regime using CxU-defined criteria",
+      "cxuTiers": ["regime_models"],
+      "outputType": "regime_classification"
+    },
+    {
+      "id": "signal-assessor",
+      "name": "Signal Assessor",
+      "description": "Evaluates incoming signals against CxU-stored quality ratings per regime",
+      "cxuTiers": ["learnings"],
+      "outputType": "signal_assessment"
+    },
+    {
+      "id": "trade-decider",
+      "name": "Trade Decider",
+      "description": "Makes trade decisions by assembling axiom + playbook + signal CxUs",
+      "cxuTiers": ["axioms", "playbooks", "learnings"],
+      "outputType": "trade_decision"
+    },
+    {
+      "id": "reflector",
+      "name": "Reflector",
+      "description": "Post-trade analysis — proposes CxU updates with evidence and version tracking",
+      "cxuTiers": ["playbooks", "learnings"],
+      "outputType": "reflection_output"
+    }
+  ],
+  "outputMappings": {
+    "regime_classification": {
+      "tab": "trading",
+      "components": ["regime-badge", "regime-chart"]
+    },
+    "signal_assessment": {
+      "tab": "signals",
+      "components": ["signal-quality-matrix", "signal-regime-heatmap"]
+    },
+    "trade_decision": {
+      "tab": "trading",
+      "components": ["decision-card", "gravity-chart"]
+    },
+    "reflection_output": {
+      "tab": "reflection",
+      "components": ["cxu-evolution-timeline", "performance-delta"]
+    }
+  }
+}

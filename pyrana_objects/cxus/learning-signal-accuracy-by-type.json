@@ -1,0 +1,54 @@
+{
+  "alias": "learning-signal-accuracy-by-type",
+  "cxu_id": "1220e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0",
+  "cxu_object": {
+    "claim": "Signal accuracy varies dramatically by type with onchain-flow at ninety-three percent at fifteen minutes and vwap at sixty-seven to seventy-three percent being the most reliable while basis at seven percent and bb-reversal at seven percent are actively harmful and should be blocked",
+    "supporting_contexts": [
+      {
+        "text": "Best performers: onchain-flow 93% at 15m, vwap 67-73% at 5-15m. Medium: technical 53%, momentum 53% (better for range than direction). Worst: basis 7%, bb-reversal 7% (useless for direction; block these).",
+        "line": null
+      },
+      {
+        "text": "8,000+ settled predictions analyzed across all signal types. Signal accuracy varies wildly by type and horizon. The blocklist should include basis and bb-reversal signal types as they are worse than random.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "finding",
+      "keywords": ["signal accuracy", "onchain-flow", "vwap", "basis", "bb-reversal", "blocklist"],
+      "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"],
+      "evidence_strength": "strong",
+      "quality_metrics": {
+        "confidence_score": 0.90,
+        "specificity_score": 0.95,
+        "completeness_score": 0.82,
+        "standalone_score": 0.88
+      }
+    },
+    "parameters": {
+      "blockedSignalTypes": {
+        "value": "basis,bb-reversal",
+        "description": "Comma-separated list of signal types to block (accuracy below 15%)"
+      },
+      "preferredSignalTypes": {
+        "value": "onchain-flow,vwap,technical,momentum",
+        "description": "Comma-separated list of signal types with above-average accuracy"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "reflector-agent",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Initial signal quality assessment from 8,000+ settled predictions",
+    "prior_cxu_id": null,
+    "source": "agdel-trading-wiki/signals/accuracy.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:learning", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"]
+  }
+}

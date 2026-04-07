@@ -1,0 +1,74 @@
+{
+  "alias": "playbook-volatile",
+  "cxu_id": "1220d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9",
+  "cxu_object": {
+    "claim": "In volatile market regimes the optimal strategy is defensive with half position sizing tight stop losses and extreme selectivity only entering when ninety percent or more of signals agree on direction",
+    "supporting_contexts": [
+      {
+        "text": "Volatile regime: defensive playbook. Risk management: max size 0.5 (partial position), tighter stop losses, wider take-profit targets. Only enter when signal consensus is extremely high (>90%). Most decisions should be HOLD.",
+        "line": null
+      },
+      {
+        "text": "US session (14:00-20:00 UTC) produces the most volatile conditions. No single strategy wins in volatile markets. Capital preservation is the primary objective when volatility regime is detected.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "prescribed",
+      "claim_type": "procedure",
+      "keywords": ["volatile", "defensive", "half position", "tight stops", "capital preservation"],
+      "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"],
+      "evidence_strength": "moderate",
+      "quality_metrics": {
+        "confidence_score": 0.78,
+        "specificity_score": 0.82,
+        "completeness_score": 0.75,
+        "standalone_score": 0.85
+      }
+    },
+    "parameters": {
+      "positionSizeMultiplier": {
+        "value": 0.5,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.1,
+        "description": "Position size multiplier (0.5 = half size for capital preservation)"
+      },
+      "consensusThresholdPct": {
+        "value": 90,
+        "min": 75,
+        "max": 100,
+        "step": 5,
+        "description": "Minimum signal consensus required before entry in volatile regime"
+      },
+      "stopLossPct": {
+        "value": 2.0,
+        "min": 1.0,
+        "max": 4.0,
+        "step": 0.5,
+        "description": "Fixed stop loss percentage (tighter than other regimes)"
+      },
+      "maxTradesPerDay": {
+        "value": 1,
+        "min": 0,
+        "max": 3,
+        "step": 1,
+        "description": "Maximum entries per day — strongly biased toward zero"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T00:00:00+00:00",
+    "created_by": "trading-wiki-extraction",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Initial volatile playbook — defensive, capital preservation focus",
+    "prior_cxu_id": null,
+    "source": "agdel-trading-wiki/strategies/regime-adaptive.md"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"]
+  }
+}

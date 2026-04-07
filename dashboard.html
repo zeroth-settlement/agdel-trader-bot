@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgDel Trader Bot</title>
+
+  <!-- CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@9.1.0/marked.min.js"></script>
+
+  <!-- Design Guide -->
+  <link rel="stylesheet" href="/design-guide/pyrana-theme.css">
+  <link rel="stylesheet" href="/design-guide/pyrana-components.css">
+  <link rel="stylesheet" href="/design-guide/pyrana-utilities.css">
+
+  <!-- Shared Components -->
+  <script src="/components/cxu-pill.js"></script>
+  <script src="/components/output-viewer.js"></script>
+  <script src="/components/output-viewer/styles.js"></script>
+  <script src="/components/output-viewer/index.js"></script>
+  <script src="/components/pyrana-library/api-client.js"></script>
+  <script src="/components/pyrana-library/styles.js"></script>
+  <script src="/components/pyrana-library/object-list.js"></script>
+  <script src="/components/pyrana-library/expanded-view.js"></script>
+  <script src="/components/pyrana-library/modal.js"></script>
+  <script src="/components/pyrana-library/index.js"></script>
+
+  <style>
+    /* Layout-specific styles only — theme comes from design guide */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--py-font-sans); background: hsl(var(--py-bg)); color: hsl(var(--py-fg)); min-height: 100vh; }
+
+    /* Header */
+    .app-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--py-space-3) var(--py-space-6);
+      border-bottom: 1px solid hsl(var(--py-border));
+      background: hsl(var(--py-bg-subtle));
+      position: sticky; top: 0; z-index: 100;
+    }
+    .app-header-left { display: flex; align-items: center; gap: var(--py-space-4); }
+    .app-header-right { display: flex; align-items: center; gap: var(--py-space-3); }
+    .app-title { font-size: 1.1rem; font-weight: 600; color: hsl(var(--py-fg-heading)); }
+
+    /* Market strip */
+    .market-strip {
+      display: flex; align-items: center; gap: var(--py-space-6);
+      padding: var(--py-space-2) var(--py-space-6);
+      border-bottom: 1px solid hsl(var(--py-border));
+      background: hsl(var(--py-bg));
+      font-family: var(--py-font-mono);
+    }
+    .mark-price { font-size: 1.5rem; font-weight: 700; }
+    .price-up { color: hsl(var(--py-success)); }
+    .price-down { color: hsl(var(--py-error)); }
+    .price-flat { color: hsl(var(--py-fg-muted)); }
+
+    /* Tab navigation */
+    .tab-nav {
+      display: flex; gap: 0; border-bottom: 1px solid hsl(var(--py-border));
+      padding: 0 var(--py-space-6); background: hsl(var(--py-bg-subtle));
+      overflow-x: auto;
+    }
+    .tab-btn {
+      padding: var(--py-space-3) var(--py-space-4); border: none; background: none;
+      color: hsl(var(--py-fg-muted)); cursor: pointer; font-size: 0.85rem;
+      font-weight: 500; border-bottom: 2px solid transparent;
+      white-space: nowrap; transition: all var(--py-transition-fast);
+    }
+    .tab-btn:hover { color: hsl(var(--py-fg)); }
+    .tab-btn.active { color: hsl(var(--py-primary)); border-bottom-color: hsl(var(--py-primary)); }
+    .tab-panel { display: none; padding: var(--py-space-4) var(--py-space-6); }
+    .tab-panel.active { display: block; }
+
+    /* KPI row */
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: var(--py-space-3); margin-bottom: var(--py-space-4);
+    }
+    .kpi-card {
+      background: hsl(var(--py-card)); border: 1px solid hsl(var(--py-border));
+      border-radius: var(--py-radius); padding: var(--py-space-3) var(--py-space-4);
+    }
+    .kpi-label { font-size: 0.7rem; text-transform: uppercase; color: hsl(var(--py-fg-muted)); letter-spacing: 0.05em; }
+    .kpi-value { font-size: 1.25rem; font-weight: 700; font-family: var(--py-font-mono); margin-top: 2px; }
+
+    /* Position card */
+    .position-card {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: var(--py-space-4); margin-bottom: var(--py-space-4);
+    }
+    @media (max-width: 900px) { .position-card { grid-template-columns: 1fr; } }
+
+    /* Gravity chart */
+    .gravity-container {
+      background: hsl(var(--py-card)); border: 1px solid hsl(var(--py-border));
+      border-radius: var(--py-radius); padding: var(--py-space-3);
+      margin-bottom: var(--py-space-4); position: relative;
+    }
+    .gravity-canvas { width: 100%; height: 320px; }
+
+    /* Decision card */
+    .decision-card {
+      background: hsl(var(--py-card)); border: 1px solid hsl(var(--py-border));
+      border-radius: var(--py-radius); padding: var(--py-space-4);
+      margin-bottom: var(--py-space-4);
+    }
+    .decision-header { display: flex; align-items: center; gap: var(--py-space-3); margin-bottom: var(--py-space-3); }
+    .decision-action {
+      font-size: 1rem; font-weight: 700; text-transform: uppercase;
+      padding: var(--py-space-1) var(--py-space-3); border-radius: var(--py-radius-sm);
+    }
+    .action-hold { background: hsl(var(--py-fg-muted) / 0.2); color: hsl(var(--py-fg-muted)); }
+    .action-long { background: hsl(var(--py-success) / 0.2); color: hsl(var(--py-success)); }
+    .action-short { background: hsl(var(--py-error) / 0.2); color: hsl(var(--py-error)); }
+    .action-close { background: hsl(var(--py-warning) / 0.2); color: hsl(var(--py-warning)); }
+    .decision-citations { margin-top: var(--py-space-3); padding-top: var(--py-space-3); border-top: 1px solid hsl(var(--py-border)); }
+
+    /* Signal tables */
+    .signal-section { margin-bottom: var(--py-space-4); }
+    .signal-table-wrap { max-height: 360px; overflow-y: auto; border: 1px solid hsl(var(--py-border)); border-radius: var(--py-radius); }
+    .signal-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; font-family: var(--py-font-mono); }
+    .signal-table th { position: sticky; top: 0; background: hsl(var(--py-bg-subtle)); padding: var(--py-space-2); text-align: left; font-size: 0.7rem; text-transform: uppercase; color: hsl(var(--py-fg-muted)); border-bottom: 1px solid hsl(var(--py-border)); }
+    .signal-table td { padding: var(--py-space-2); border-bottom: 1px solid hsl(var(--py-border) / 0.5); }
+    .signal-table tr:hover { background: hsl(var(--py-bg-subtle) / 0.5); }
+
+    /* Knowledge grid */
+    .knowledge-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--py-space-4); }
+    @media (max-width: 900px) { .knowledge-grid { grid-template-columns: 1fr; } }
+    .cxu-tier-card { background: hsl(var(--py-card)); border: 1px solid hsl(var(--py-border)); border-radius: var(--py-radius); }
+    .cxu-tier-header {
+      padding: var(--py-space-3) var(--py-space-4); border-bottom: 1px solid hsl(var(--py-border));
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .cxu-tier-body { padding: var(--py-space-3) var(--py-space-4); max-height: 400px; overflow-y: auto; }
+    .cxu-item { padding: var(--py-space-2) 0; border-bottom: 1px solid hsl(var(--py-border) / 0.3); }
+    .cxu-item:last-child { border-bottom: none; }
+    .cxu-claim { font-size: 0.85rem; line-height: 1.5; }
+    .cxu-meta { display: flex; gap: var(--py-space-2); margin-top: var(--py-space-1); flex-wrap: wrap; }
+
+    /* Trade history */
+    .trade-table-wrap { max-height: 500px; overflow-y: auto; border: 1px solid hsl(var(--py-border)); border-radius: var(--py-radius); }
+
+    /* Reflection timeline */
+    .reflection-timeline { display: flex; flex-direction: column; gap: var(--py-space-4); }
+    .reflection-entry { background: hsl(var(--py-card)); border: 1px solid hsl(var(--py-border)); border-radius: var(--py-radius); padding: var(--py-space-4); }
+    .reflection-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--py-space-3); }
+    .reflection-changes { margin-top: var(--py-space-3); }
+    .cxu-diff { display: grid; grid-template-columns: 1fr 1fr; gap: var(--py-space-2); padding: var(--py-space-2); background: hsl(var(--py-bg-subtle)); border-radius: var(--py-radius-sm); margin-top: var(--py-space-2); font-family: var(--py-font-mono); font-size: 0.8rem; }
+
+    /* Status badges */
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .status-connected { background: hsl(var(--py-success)); }
+    .status-disconnected { background: hsl(var(--py-error)); }
+
+    .regime-badge {
+      display: inline-flex; align-items: center; gap: var(--py-space-1);
+      padding: var(--py-space-1) var(--py-space-3); border-radius: var(--py-radius-full);
+      font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    }
+    .regime-ranging { background: hsl(var(--py-info) / 0.2); color: hsl(var(--py-info)); }
+    .regime-trending { background: hsl(var(--py-success) / 0.2); color: hsl(var(--py-success)); }
+    .regime-volatile { background: hsl(var(--py-warning) / 0.2); color: hsl(var(--py-warning)); }
+    .regime-unknown { background: hsl(var(--py-fg-muted) / 0.2); color: hsl(var(--py-fg-muted)); }
+
+    /* Dual feed tabs */
+    .feed-tabs { display: flex; gap: 0; margin-bottom: var(--py-space-4); }
+    .feed-tab {
+      padding: var(--py-space-2) var(--py-space-4); border: 1px solid hsl(var(--py-border));
+      background: none; color: hsl(var(--py-fg-muted)); cursor: pointer;
+      font-size: 0.8rem; font-weight: 500;
+    }
+    .feed-tab:first-child { border-radius: var(--py-radius-sm) 0 0 var(--py-radius-sm); }
+    .feed-tab:last-child { border-radius: 0 var(--py-radius-sm) var(--py-radius-sm) 0; }
+    .feed-tab.active { background: hsl(var(--py-primary)); color: #fff; border-color: hsl(var(--py-primary)); }
+    .feed-panel { display: none; }
+    .feed-panel.active { display: block; }
+
+    /* Library aside */
+    .library-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 200; display: none;
+    }
+    .library-overlay.open { display: block; }
+    .library-tray {
+      position: fixed; top: 0; right: -420px; width: 420px; height: 100%;
+      background: hsl(var(--py-bg)); border-left: 1px solid hsl(var(--py-border));
+      z-index: 201; transition: right var(--py-transition-slow);
+      display: flex; flex-direction: column;
+    }
+    .library-tray.open { right: 0; }
+    .library-tray-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--py-space-3) var(--py-space-4);
+      border-bottom: 1px solid hsl(var(--py-border));
+    }
+    .library-tray-body { flex: 1; overflow-y: auto; }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: var(--py-space-8); color: hsl(var(--py-fg-muted)); }
+    .empty-state-icon { font-size: 2rem; margin-bottom: var(--py-space-3); }
+
+    /* Agent output panels */
+    .agent-output-grid { display: grid; grid-template-columns: 1fr; gap: var(--py-space-4); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="app-header-left">
+      <span class="app-title">AgDel Trader Bot</span>
+      <span class="py-badge py-badge-info" id="modeBadge">PAPER</span>
+      <span style="display:flex;align-items:center;gap:4px;">
+        <span class="status-dot status-disconnected" id="wsStatus"></span>
+        <span class="py-text-xs py-text-muted" id="wsLabel">Disconnected</span>
+      </span>
+    </div>
+    <div class="app-header-right">
+      <button class="py-btn py-btn-sm py-btn-outline" id="autoTradeToggle" onclick="toggleAutoTrade()">Auto Trade: OFF</button>
+      <button class="py-btn py-btn-sm py-btn-ghost" onclick="toggleLibrary()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.5A.5.5 0 0 1 1.5 2h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 2.5zm0 4A.5.5 0 0 1 1.5 6h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 6.5zm0 4A.5.5 0 0 1 1.5 10h13a.5.5 0 0 1 0 1h-13a.5.5 0 0 1-.5-.5z"/></svg>
+        Library
+      </button>
+    </div>
+  </header>
+
+  <!-- Market Strip -->
+  <div class="market-strip">
+    <div>
+      <span class="py-text-xs py-text-muted">ETH-USD</span>
+      <span class="mark-price price-flat" id="markPrice">--</span>
+    </div>
+    <div>
+      <span class="py-text-xs py-text-muted">Position</span>
+      <span id="positionSide" class="py-text-bold">FLAT</span>
+      <span id="positionSize" class="py-text-muted py-text-sm">--</span>
+    </div>
+    <div>
+      <span class="py-text-xs py-text-muted">P&L</span>
+      <span id="unrealizedPnl" class="py-text-bold">$0.00</span>
+    </div>
+    <div>
+      <span class="py-text-xs py-text-muted">Regime</span>
+      <span class="regime-badge regime-unknown" id="regimeBadge">UNKNOWN</span>
+    </div>
+    <div>
+      <span class="py-text-xs py-text-muted">Playbook</span>
+      <span id="activePlaybook" class="py-text-sm">--</span>
+    </div>
+    <div>
+      <span class="py-text-xs py-text-muted">Equity</span>
+      <span id="accountEquity" class="py-text-bold py-text-sm">--</span>
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('trading')">Trading</button>
+    <button class="tab-btn" onclick="switchTab('signals')">Signals</button>
+    <button class="tab-btn" onclick="switchTab('knowledge')">Knowledge</button>
+    <button class="tab-btn" onclick="switchTab('trades')">Trades</button>
+    <button class="tab-btn" onclick="switchTab('reflection')">Reflection</button>
+    <button class="tab-btn" onclick="switchTab('agent-output')">Agent Output</button>
+  </nav>
+
+  <!-- Tab: Trading -->
+  <div class="tab-panel active" id="tab-trading">
+    <!-- KPI Row -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Net P&L</div>
+        <div class="kpi-value" id="kpiPnl">$0.00</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Win Rate</div>
+        <div class="kpi-value" id="kpiWinRate">--%</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Trades</div>
+        <div class="kpi-value" id="kpiTotalTrades">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Fee Drag</div>
+        <div class="kpi-value" id="kpiFeeDrag">$0.00</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Active CxUs</div>
+        <div class="kpi-value" id="kpiCxuCount">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Trades Today</div>
+        <div class="kpi-value" id="kpiTradesToday">0</div>
+      </div>
+    </div>
+
+    <!-- Gravity Chart -->
+    <div class="gravity-container">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-2);">
+        <span class="py-text-sm py-text-bold">Prediction Gravity</span>
+        <span class="py-text-xs py-text-muted" id="chartTimestamp">--</span>
+      </div>
+      <canvas class="gravity-canvas" id="gravityCanvas"></canvas>
+    </div>
+
+    <!-- Decision Card -->
+    <div class="decision-card">
+      <div class="decision-header">
+        <span class="py-text-sm py-text-bold">Latest Decision</span>
+        <span class="decision-action action-hold" id="decisionAction">HOLD</span>
+        <span class="py-text-xs py-text-muted" id="decisionTime">--</span>
+      </div>
+      <div id="decisionReasoning" class="py-text-sm" style="line-height:1.6;">
+        Waiting for first decision cycle...
+      </div>
+      <div class="decision-citations" id="decisionCitations" style="display:none;">
+        <span class="py-text-xs py-text-muted">CxU Citations:</span>
+        <div id="decisionCxuPills" style="margin-top:var(--py-space-1);display:flex;flex-wrap:wrap;gap:var(--py-space-1);"></div>
+      </div>
+    </div>
+
+    <!-- Position Detail -->
+    <div class="position-card">
+      <div class="py-card">
+        <div class="py-card-header"><span class="py-text-sm py-text-bold">Risk Levels</span></div>
+        <div class="py-card-content" id="riskLevels">
+          <div class="py-text-muted py-text-sm">No open position</div>
+        </div>
+      </div>
+      <div class="py-card">
+        <div class="py-card-header"><span class="py-text-sm py-text-bold">Signal Summary</span></div>
+        <div class="py-card-content" id="signalSummary">
+          <div class="py-text-muted py-text-sm">Waiting for signals...</div>
+        </div>
+      </div>
+      <div class="py-card">
+        <div class="py-card-header"><span class="py-text-sm py-text-bold">AGDEL Budget</span></div>
+        <div class="py-card-content" id="agdelBudget">
+          <div class="py-text-muted py-text-sm">--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Signals -->
+  <div class="tab-panel" id="tab-signals">
+    <div class="feed-tabs">
+      <button class="feed-tab active" onclick="switchFeed('agdel')">AGDEL Marketplace</button>
+      <button class="feed-tab" onclick="switchFeed('direct')">Direct Signal Feed</button>
+    </div>
+
+    <!-- AGDEL Marketplace Feed -->
+    <div class="feed-panel active" id="feed-agdel">
+      <div class="signal-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-3);">
+          <span class="py-text-bold">Purchased Signals</span>
+          <span class="py-badge py-badge-info" id="purchasedCount">0</span>
+        </div>
+        <div class="signal-table-wrap">
+          <table class="signal-table">
+            <thead><tr>
+              <th>Time</th><th>Hz</th><th>Type</th><th>Dir</th><th>Conf</th><th>C*C</th><th>Target</th><th>Outcome</th>
+            </tr></thead>
+            <tbody id="purchasedBody"><tr><td colspan="8" class="py-text-muted" style="text-align:center;">No purchased signals</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="signal-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-3);">
+          <span class="py-text-bold">Available Signals</span>
+          <button class="py-btn py-btn-xs py-btn-outline" id="autoBuyToggle" onclick="toggleAutoBuy()">Auto Buy: OFF</button>
+        </div>
+        <div class="signal-table-wrap">
+          <table class="signal-table">
+            <thead><tr>
+              <th>Expires</th><th>Hz</th><th>Type</th><th>Maker</th><th>Cost</th><th>Conf</th><th>Quality</th><th>Win%</th><th></th>
+            </tr></thead>
+            <tbody id="availableBody"><tr><td colspan="9" class="py-text-muted" style="text-align:center;">No signals available</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Direct Signal Bot Feed -->
+    <div class="feed-panel" id="feed-direct">
+      <div class="signal-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-3);">
+          <span class="py-text-bold">Signal Cluster Drift</span>
+          <span class="py-text-xs py-text-muted" id="directFeedTimestamp">--</span>
+        </div>
+        <div id="clusterDriftView">
+          <div class="empty-state">
+            <div class="empty-state-icon">&#128225;</div>
+            <div>Connect to signal bot to see cluster drift analysis</div>
+            <div class="py-text-xs py-text-muted" style="margin-top:var(--py-space-2);">~500 signals per tick, aggregated by type and horizon</div>
+          </div>
+        </div>
+      </div>
+      <div class="signal-section">
+        <span class="py-text-bold">Signal Quality by Regime</span>
+        <div style="margin-top:var(--py-space-3);">
+          <canvas id="signalQualityChart" height="250"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Knowledge -->
+  <div class="tab-panel" id="tab-knowledge">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-4);">
+      <div>
+        <span class="py-text-bold py-text-lg">CxU Knowledge Base</span>
+        <span class="py-text-muted py-text-sm" style="margin-left:var(--py-space-2);">The agent's evolving brain</span>
+      </div>
+      <span class="py-badge py-badge-cxu" id="totalCxuBadge">0 CxUs</span>
+    </div>
+
+    <div class="knowledge-grid">
+      <!-- Axioms -->
+      <div class="cxu-tier-card">
+        <div class="cxu-tier-header" style="border-left:3px solid hsl(var(--py-error));">
+          <div>
+            <span class="py-text-bold">Axioms</span>
+            <span class="py-badge py-badge-pill py-badge-error py-text-xs" style="margin-left:var(--py-space-2);">HUMAN LOCKED</span>
+          </div>
+          <span class="py-text-xs py-text-muted" id="axiomCount">0</span>
+        </div>
+        <div class="cxu-tier-body" id="axiomList">
+          <div class="py-text-muted py-text-sm">Loading axioms...</div>
+        </div>
+      </div>
+
+      <!-- Regime Models -->
+      <div class="cxu-tier-card">
+        <div class="cxu-tier-header" style="border-left:3px solid hsl(var(--py-info));">
+          <div>
+            <span class="py-text-bold">Regime Models</span>
+            <span class="py-badge py-badge-pill py-badge-error py-text-xs" style="margin-left:var(--py-space-2);">HUMAN LOCKED</span>
+          </div>
+          <span class="py-text-xs py-text-muted" id="regimeModelCount">0</span>
+        </div>
+        <div class="cxu-tier-body" id="regimeModelList">
+          <div class="py-text-muted py-text-sm">Loading regime models...</div>
+        </div>
+      </div>
+
+      <!-- Playbooks -->
+      <div class="cxu-tier-card">
+        <div class="cxu-tier-header" style="border-left:3px solid hsl(var(--py-success));">
+          <div>
+            <span class="py-text-bold">Playbooks</span>
+            <span class="py-badge py-badge-pill py-badge-success py-text-xs" style="margin-left:var(--py-space-2);">AGENT ADJUSTABLE</span>
+          </div>
+          <span class="py-text-xs py-text-muted" id="playbookCount">0</span>
+        </div>
+        <div class="cxu-tier-body" id="playbookList">
+          <div class="py-text-muted py-text-sm">Loading playbooks...</div>
+        </div>
+      </div>
+
+      <!-- Learnings -->
+      <div class="cxu-tier-card">
+        <div class="cxu-tier-header" style="border-left:3px solid hsl(var(--py-warning));">
+          <div>
+            <span class="py-text-bold">Learnings</span>
+            <span class="py-badge py-badge-pill py-badge-success py-text-xs" style="margin-left:var(--py-space-2);">AGENT CREATED</span>
+          </div>
+          <span class="py-text-xs py-text-muted" id="learningCount">0</span>
+        </div>
+        <div class="cxu-tier-body" id="learningList">
+          <div class="py-text-muted py-text-sm">Loading learnings...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CxU Evolution Timeline -->
+    <div style="margin-top:var(--py-space-6);">
+      <span class="py-text-bold">CxU Evolution Timeline</span>
+      <div id="cxuTimeline" style="margin-top:var(--py-space-3);">
+        <canvas id="cxuTimelineChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Trades -->
+  <div class="tab-panel" id="tab-trades">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-4);">
+      <span class="py-text-bold py-text-lg">Trade History</span>
+      <span class="py-text-xs py-text-muted" id="tradeCount">0 trades</span>
+    </div>
+    <div class="trade-table-wrap">
+      <table class="signal-table">
+        <thead><tr>
+          <th>Time</th><th>Action</th><th>Size</th><th>Price</th><th>P&L</th><th>Fee</th><th>Regime</th><th>CxU Citations</th><th>Rationale</th>
+        </tr></thead>
+        <tbody id="tradeHistoryBody">
+          <tr><td colspan="9" class="py-text-muted" style="text-align:center;">No trades yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:var(--py-space-4);">
+      <span class="py-text-bold">P&L Curve</span>
+      <div style="margin-top:var(--py-space-3);">
+        <canvas id="pnlChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Reflection -->
+  <div class="tab-panel" id="tab-reflection">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-4);">
+      <div>
+        <span class="py-text-bold py-text-lg">Reflection Loop</span>
+        <span class="py-text-muted py-text-sm" style="margin-left:var(--py-space-2);">CxU evolution through structured learning</span>
+      </div>
+      <div style="display:flex;gap:var(--py-space-2);align-items:center;">
+        <span class="py-text-xs py-text-muted">Cycle <span id="reflectionCycle">0</span></span>
+        <button class="py-btn py-btn-xs py-btn-secondary" onclick="triggerReflection()">Run Now</button>
+      </div>
+    </div>
+
+    <div class="kpi-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:var(--py-space-4);">
+      <div class="kpi-card">
+        <div class="kpi-label">CxUs Created</div>
+        <div class="kpi-value" id="reflCxuCreated">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">CxUs Updated</div>
+        <div class="kpi-value" id="reflCxuUpdated">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Pending Human Review</div>
+        <div class="kpi-value" id="reflPendingReview">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Next Reflection</div>
+        <div class="kpi-value" id="reflNextRun">--</div>
+      </div>
+    </div>
+
+    <div class="reflection-timeline" id="reflectionTimeline">
+      <div class="empty-state">
+        <div class="empty-state-icon">&#128161;</div>
+        <div>No reflection cycles yet</div>
+        <div class="py-text-xs py-text-muted" style="margin-top:var(--py-space-2);">The reflector agent analyzes trade outcomes and proposes CxU updates</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Agent Output -->
+  <div class="tab-panel" id="tab-agent-output">
+    <div style="margin-bottom:var(--py-space-4);">
+      <span class="py-text-bold py-text-lg">Agent Output</span>
+    </div>
+    <div class="agent-output-grid" id="agentOutputGrid">
+      <div class="empty-state">
+        <div class="empty-state-icon">&#128187;</div>
+        <div>No agent outputs yet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Library Side Tray -->
+  <div class="library-overlay" id="libraryOverlay" onclick="toggleLibrary()"></div>
+  <aside class="library-tray" id="libraryTray">
+    <div class="library-tray-header">
+      <span class="py-text-bold">Pyrana Library</span>
+      <button class="py-btn py-btn-xs py-btn-ghost" onclick="toggleLibrary()">&times;</button>
+    </div>
+    <div class="library-tray-body" id="libraryContainer"></div>
+  </aside>
+
+  <script>
+    // ─── State ────────────────────────────────────────────────────────
+    const CONFIG = {
+      tradingServerUrl: 'http://localhost:9004',
+      bridgeUrl: 'http://localhost:9002',
+      signalBotUrl: 'http://localhost:9502',
+      wsReconnectMin: 1000,
+      wsReconnectMax: 10000,
+    };
+
+    let state = {};
+    let ws = null;
+    let wsReconnectDelay = CONFIG.wsReconnectMin;
+    let priceHistory = [];
+    let tradeHistory = [];
+    let cxuStore = { axioms: [], regime_models: [], playbooks: [], learnings: [] };
+    let reflectionHistory = [];
+    let agentOutputs = {};
+
+    // ─── Tab switching ──────────────────────────────────────────────
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelector(`#tab-${tabId}`).classList.add('active');
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        if (b.textContent.toLowerCase().replace(/\s+/g, '-') === tabId ||
+            (tabId === 'agent-output' && b.textContent === 'Agent Output') ||
+            (tabId === 'trading' && b.textContent === 'Trading') ||
+            (tabId === 'signals' && b.textContent === 'Signals') ||
+            (tabId === 'knowledge' && b.textContent === 'Knowledge') ||
+            (tabId === 'trades' && b.textContent === 'Trades') ||
+            (tabId === 'reflection' && b.textContent === 'Reflection')) {
+          b.classList.add('active');
+        }
+      });
+    }
+
+    function switchFeed(feedId) {
+      document.querySelectorAll('.feed-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.feed-panel').forEach(p => p.classList.remove('active'));
+      document.querySelector(`#feed-${feedId}`).classList.add('active');
+      document.querySelectorAll('.feed-tab').forEach(b => {
+        if ((feedId === 'agdel' && b.textContent.includes('AGDEL')) ||
+            (feedId === 'direct' && b.textContent.includes('Direct'))) {
+          b.classList.add('active');
+        }
+      });
+    }
+
+    // ─── Library tray ───────────────────────────────────────────────
+    function toggleLibrary() {
+      const overlay = document.getElementById('libraryOverlay');
+      const tray = document.getElementById('libraryTray');
+      overlay.classList.toggle('open');
+      tray.classList.toggle('open');
+    }
+
+    // ─── WebSocket ──────────────────────────────────────────────────
+    function connectWs() {
+      const wsUrl = CONFIG.tradingServerUrl.replace('http', 'ws') + '/ws';
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (e) {
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        wsReconnectDelay = CONFIG.wsReconnectMin;
+        document.getElementById('wsStatus').className = 'status-dot status-connected';
+        document.getElementById('wsLabel').textContent = 'Connected';
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.type === 'reflection') {
+            handleReflection(msg);
+          } else if (msg.timestamp) {
+            state = msg;
+            renderAll();
+          }
+        } catch (e) { /* ignore parse errors */ }
+      };
+
+      ws.onclose = () => {
+        document.getElementById('wsStatus').className = 'status-dot status-disconnected';
+        document.getElementById('wsLabel').textContent = 'Disconnected';
+        scheduleReconnect();
+      };
+
+      ws.onerror = () => { ws.close(); };
+    }
+
+    function scheduleReconnect() {
+      setTimeout(() => {
+        wsReconnectDelay = Math.min(wsReconnectDelay * 1.5, CONFIG.wsReconnectMax);
+        connectWs();
+      }, wsReconnectDelay);
+    }
+
+    // ─── Render all ─────────────────────────────────────────────────
+    function renderAll() {
+      renderMarketStrip();
+      renderKpis();
+      renderDecision();
+      renderPositionCards();
+      renderGravityChart();
+      renderSignals();
+    }
+
+    // ─── Market strip ───────────────────────────────────────────────
+    function renderMarketStrip() {
+      const price = state.markPrice;
+      if (!price) return;
+
+      const el = document.getElementById('markPrice');
+      el.textContent = `$${Number(price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+      // Price direction
+      if (priceHistory.length > 1) {
+        const prev = priceHistory[priceHistory.length - 2];
+        el.className = 'mark-price ' + (price > prev ? 'price-up' : price < prev ? 'price-down' : 'price-flat');
+      }
+      priceHistory.push(price);
+      if (priceHistory.length > 720) priceHistory.shift();
+
+      // Position
+      const pos = state.position || state.hlPosition || {};
+      document.getElementById('positionSide').textContent = (pos.side || 'FLAT').toUpperCase();
+      document.getElementById('positionSize').textContent = pos.size ? `${pos.size} ETH` : '--';
+      document.getElementById('unrealizedPnl').textContent = formatCurrency(pos.unrealizedPnl || state.portfolio?.pnl || 0);
+
+      // Regime
+      const regime = state.regime?.current || state.regime || 'UNKNOWN';
+      const regimeBadge = document.getElementById('regimeBadge');
+      regimeBadge.textContent = regime.toUpperCase();
+      regimeBadge.className = 'regime-badge regime-' + regime.toLowerCase();
+
+      // Playbook
+      document.getElementById('activePlaybook').textContent = state.strategy?.activePlaybook || '--';
+
+      // Mode
+      document.getElementById('modeBadge').textContent = (state.tradingMode || 'PAPER').toUpperCase();
+
+      // Equity
+      const equity = state.hlPortfolio?.equity || state.portfolio?.equity || 0;
+      document.getElementById('accountEquity').textContent = formatCurrency(equity);
+
+      // Auto trade
+      const atBtn = document.getElementById('autoTradeToggle');
+      atBtn.textContent = `Auto Trade: ${state.autoTrade ? 'ON' : 'OFF'}`;
+      atBtn.className = `py-btn py-btn-sm ${state.autoTrade ? 'py-btn-primary' : 'py-btn-outline'}`;
+    }
+
+    // ─── KPIs ───────────────────────────────────────────────────────
+    function renderKpis() {
+      const pnl = state.portfolio?.pnl || 0;
+      document.getElementById('kpiPnl').textContent = formatCurrency(pnl);
+      document.getElementById('kpiPnl').style.color = pnl >= 0 ? 'hsl(var(--py-success))' : 'hsl(var(--py-error))';
+
+      document.getElementById('kpiWinRate').textContent = state.performance?.winRate != null ? `${(state.performance.winRate * 100).toFixed(1)}%` : '--%';
+      document.getElementById('kpiTotalTrades').textContent = state.performance?.totalTrades || tradeHistory.length || 0;
+      document.getElementById('kpiFeeDrag').textContent = formatCurrency(state.performance?.totalFees || 0);
+      document.getElementById('kpiCxuCount').textContent = Object.values(cxuStore).reduce((s, a) => s + a.length, 0);
+      document.getElementById('kpiTradesToday').textContent = state.performance?.tradesToday || 0;
+    }
+
+    // ─── Decision card ──────────────────────────────────────────────
+    function renderDecision() {
+      const decision = state.lastLlmDecision || state.lastDecision || {};
+      if (!decision.action) return;
+
+      const actionEl = document.getElementById('decisionAction');
+      actionEl.textContent = decision.action.toUpperCase();
+      const actionClass = decision.action.includes('long') ? 'action-long'
+        : decision.action.includes('short') ? 'action-short'
+        : decision.action === 'close' ? 'action-close' : 'action-hold';
+      actionEl.className = 'decision-action ' + actionClass;
+
+      document.getElementById('decisionTime').textContent = decision.timestamp ? timeAgo(decision.timestamp) : '--';
+
+      // Reasoning with CxU citations
+      let reasoning = decision.reasoning || '';
+      if (typeof CxuPill !== 'undefined' && decision.citations) {
+        reasoning = CxuPill.processMarkdownCitations(reasoning, decision.citations);
+      }
+      document.getElementById('decisionReasoning').innerHTML = reasoning;
+
+      // Citation pills
+      if (decision.citations && decision.citations.length > 0) {
+        document.getElementById('decisionCitations').style.display = 'block';
+        const pillsEl = document.getElementById('decisionCxuPills');
+        pillsEl.innerHTML = decision.citations.map(c =>
+          typeof CxuPill !== 'undefined'
+            ? CxuPill.render({ cxuId: c.cxu_id, alias: c.alias })
+            : `<span class="py-badge py-badge-cxu">${c.alias}</span>`
+        ).join(' ');
+      }
+    }
+
+    // ─── Position cards ─────────────────────────────────────────────
+    function renderPositionCards() {
+      // Risk levels
+      const risk = state.riskLevels || {};
+      const riskEl = document.getElementById('riskLevels');
+      if (risk.slPrice || risk.tpPrice) {
+        riskEl.innerHTML = `
+          <div class="py-flex py-flex-col" style="gap:var(--py-space-2);font-family:var(--py-font-mono);font-size:0.85rem;">
+            ${risk.slPrice ? `<div><span class="py-text-muted">SL:</span> <span style="color:hsl(var(--py-error))">$${Number(risk.slPrice).toFixed(2)}</span> <span class="py-text-xs py-text-muted">${risk.slMode || ''}</span></div>` : ''}
+            ${risk.tpPrice ? `<div><span class="py-text-muted">TP:</span> <span style="color:hsl(var(--py-success))">$${Number(risk.tpPrice).toFixed(2)}</span></div>` : ''}
+            ${risk.signalTarget ? `<div><span class="py-text-muted">Target:</span> $${Number(risk.signalTarget).toFixed(2)}</div>` : ''}
+            ${risk.cooldownRemaining > 0 ? `<div><span class="py-text-muted">Cooldown:</span> ${risk.cooldownRemaining}s</div>` : ''}
+          </div>`;
+      } else {
+        riskEl.innerHTML = '<div class="py-text-muted py-text-sm">No open position</div>';
+      }
+
+      // Signal summary
+      const signals = state.signals || {};
+      const summaryEl = document.getElementById('signalSummary');
+      if (signals.fast || signals.slow) {
+        summaryEl.innerHTML = `
+          <div style="font-size:0.85rem;">
+            <div class="py-flex py-flex-between"><span class="py-text-muted">Fast (5m):</span> <span class="py-text-bold">${signals.fast?.state || '--'}</span></div>
+            <div class="py-flex py-flex-between"><span class="py-text-muted">Slow (15m):</span> <span class="py-text-bold">${signals.slow?.state || '--'}</span></div>
+            ${signals.fast?.direction ? `<div class="py-flex py-flex-between"><span class="py-text-muted">Direction:</span> <span>${signals.fast.direction}</span></div>` : ''}
+            ${signals.fast?.confidence ? `<div class="py-flex py-flex-between"><span class="py-text-muted">Confidence:</span> <span>${(signals.fast.confidence * 100).toFixed(0)}%</span></div>` : ''}
+          </div>`;
+      }
+
+      // AGDEL budget
+      const agdel = state.agdel || {};
+      const budgetEl = document.getElementById('agdelBudget');
+      if (agdel.budget) {
+        const hourPct = (agdel.budget.hourlySpend / agdel.budget.hourlyLimit * 100) || 0;
+        const dayPct = (agdel.budget.dailySpend / agdel.budget.dailyLimit * 100) || 0;
+        budgetEl.innerHTML = `
+          <div style="font-size:0.85rem;">
+            <div class="py-flex py-flex-between py-mb-1"><span class="py-text-muted">Purchased:</span> <span>${agdel.purchasedCount || 0}</span></div>
+            <div class="py-mb-1"><span class="py-text-xs py-text-muted">Hourly: $${(agdel.budget.hourlySpend||0).toFixed(2)} / $${agdel.budget.hourlyLimit}</span>
+              <div style="height:4px;background:hsl(var(--py-border));border-radius:2px;margin-top:2px;">
+                <div style="height:100%;width:${Math.min(hourPct,100)}%;background:hsl(var(--py-primary));border-radius:2px;"></div>
+              </div>
+            </div>
+            <div><span class="py-text-xs py-text-muted">Daily: $${(agdel.budget.dailySpend||0).toFixed(2)} / $${agdel.budget.dailyLimit}</span>
+              <div style="height:4px;background:hsl(var(--py-border));border-radius:2px;margin-top:2px;">
+                <div style="height:100%;width:${Math.min(dayPct,100)}%;background:hsl(var(--py-primary));border-radius:2px;"></div>
+              </div>
+            </div>
+          </div>`;
+      }
+    }
+
+    // ─── Gravity chart ──────────────────────────────────────────────
+    function renderGravityChart() {
+      const canvas = document.getElementById('gravityCanvas');
+      const ctx = canvas.getContext('2d');
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = 320 * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = '320px';
+      ctx.scale(dpr, dpr);
+      const W = rect.width, H = 320;
+
+      ctx.fillStyle = 'hsl(222 47% 6%)';
+      ctx.fillRect(0, 0, W, H);
+
+      if (priceHistory.length < 2) {
+        ctx.fillStyle = 'hsl(222 10% 40%)';
+        ctx.font = '14px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('Waiting for price data...', W/2, H/2);
+        return;
+      }
+
+      const margin = { top: 20, right: 70, bottom: 30, left: 10 };
+      const plotW = W - margin.left - margin.right;
+      const plotH = H - margin.top - margin.bottom;
+
+      // Price range
+      const prices = priceHistory.slice(-180);
+      const predictions = state.predictions || [];
+      let allPrices = [...prices];
+      predictions.forEach(p => { if (p.targetPrice) allPrices.push(p.targetPrice); });
+      const minP = Math.min(...allPrices) * 0.9998;
+      const maxP = Math.max(...allPrices) * 1.0002;
+      const priceRange = maxP - minP || 1;
+
+      const toX = (i) => margin.left + (i / (prices.length - 1)) * plotW;
+      const toY = (p) => margin.top + (1 - (p - minP) / priceRange) * plotH;
+
+      // Grid
+      ctx.strokeStyle = 'hsl(222 10% 15%)';
+      ctx.lineWidth = 0.5;
+      const niceStep = Math.pow(10, Math.floor(Math.log10(priceRange))) / 2;
+      for (let p = Math.ceil(minP / niceStep) * niceStep; p <= maxP; p += niceStep) {
+        const y = toY(p);
+        ctx.beginPath(); ctx.moveTo(margin.left, y); ctx.lineTo(W - margin.right, y); ctx.stroke();
+        ctx.fillStyle = 'hsl(222 10% 40%)';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`$${p.toFixed(2)}`, W - margin.right + 5, y + 4);
+      }
+
+      // Price line
+      ctx.beginPath();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      prices.forEach((p, i) => {
+        const x = toX(i), y = toY(p);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Current price dot
+      const lastX = toX(prices.length - 1);
+      const lastY = toY(prices[prices.length - 1]);
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+
+      // Now line
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'hsl(220 90% 60%)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(lastX, margin.top); ctx.lineTo(lastX, H - margin.bottom); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Predictions
+      const nowPrice = prices[prices.length - 1];
+      predictions.forEach(pred => {
+        if (!pred.targetPrice) return;
+        const isLong = pred.direction === 'LONG';
+        const color = pred.source === 'agdel' ? 'hsl(220 80% 60%)' : 'hsl(270 60% 60%)';
+        const alpha = pred.expired ? 0.3 : 0.8;
+
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(lastX, toY(nowPrice));
+        ctx.lineTo(lastX + 60, toY(pred.targetPrice));
+        ctx.stroke();
+
+        const r = Math.max(3, (pred.qualityScore || 0.5) * 8);
+        ctx.beginPath();
+        ctx.arc(lastX + 60, toY(pred.targetPrice), r, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+
+      // SL/TP lines
+      const risk = state.riskLevels || {};
+      if (risk.slPrice) {
+        ctx.setLineDash([6, 3]);
+        ctx.strokeStyle = 'hsl(0 70% 50%)';
+        ctx.lineWidth = 1;
+        const slY = toY(risk.slPrice);
+        ctx.beginPath(); ctx.moveTo(margin.left, slY); ctx.lineTo(W - margin.right, slY); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (risk.tpPrice) {
+        ctx.setLineDash([6, 3]);
+        ctx.strokeStyle = 'hsl(120 70% 40%)';
+        ctx.lineWidth = 1;
+        const tpY = toY(risk.tpPrice);
+        ctx.beginPath(); ctx.moveTo(margin.left, tpY); ctx.lineTo(W - margin.right, tpY); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      document.getElementById('chartTimestamp').textContent = new Date().toLocaleTimeString();
+    }
+
+    // ─── Signals ────────────────────────────────────────────────────
+    function renderSignals() {
+      // Purchased
+      const purchases = state.purchases || [];
+      document.getElementById('purchasedCount').textContent = purchases.length;
+      const pBody = document.getElementById('purchasedBody');
+      if (purchases.length === 0) {
+        pBody.innerHTML = '<tr><td colspan="8" class="py-text-muted" style="text-align:center">No purchased signals</td></tr>';
+      } else {
+        pBody.innerHTML = purchases.slice(0, 50).map(p => `
+          <tr>
+            <td>${timeAgo(p.purchasedAt || p.timestamp)}</td>
+            <td>${p.horizon || '--'}</td>
+            <td>${p.signalType || p.type || '--'}</td>
+            <td style="color:${p.direction === 'LONG' ? 'hsl(var(--py-success))' : 'hsl(var(--py-error))'}">${p.direction || '--'}</td>
+            <td>${(p.confidence || 0).toFixed(2)}</td>
+            <td>${(p.confCalib || 0).toFixed(2)}</td>
+            <td>${p.targetPrice ? '$' + Number(p.targetPrice).toFixed(2) : '--'}</td>
+            <td>${p.outcome || 'pending'}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Available
+      const available = state.availableSignals || [];
+      const aBody = document.getElementById('availableBody');
+      if (available.length === 0) {
+        aBody.innerHTML = '<tr><td colspan="9" class="py-text-muted" style="text-align:center">No signals available</td></tr>';
+      } else {
+        aBody.innerHTML = available.slice(0, 50).map(s => `
+          <tr>
+            <td>${s.expiresIn || timeAgo(s.expiryTime)}</td>
+            <td>${s.horizon || '--'}</td>
+            <td>${s.signalType || s.type || '--'}</td>
+            <td title="${s.makerAddress || ''}">${(s.makerAddress || '').slice(0, 8)}...</td>
+            <td>$${(s.costUsdc || 0).toFixed(2)}</td>
+            <td>${(s.confidence || 0).toFixed(2)}</td>
+            <td>${(s.qualityScore || 0).toFixed(2)}</td>
+            <td>${s.winRate ? (s.winRate * 100).toFixed(0) + '%' : '--'}</td>
+            <td><button class="py-btn py-btn-xs py-btn-cxu" onclick="buySignal('${s.commitmentHash}')">Buy</button></td>
+          </tr>
+        `).join('');
+      }
+
+      // Auto buy toggle
+      const abBtn = document.getElementById('autoBuyToggle');
+      if (state.agdel?.autoBuy) {
+        abBtn.textContent = 'Auto Buy: ON';
+        abBtn.className = 'py-btn py-btn-xs py-btn-primary';
+      }
+    }
+
+    // ─── Knowledge tab ──────────────────────────────────────────────
+    function renderKnowledge() {
+      const tiers = [
+        { key: 'axioms', el: 'axiomList', countEl: 'axiomCount', tag: 'tier:axiom' },
+        { key: 'regime_models', el: 'regimeModelList', countEl: 'regimeModelCount', tag: 'tier:regime-model' },
+        { key: 'playbooks', el: 'playbookList', countEl: 'playbookCount', tag: 'tier:playbook' },
+        { key: 'learnings', el: 'learningList', countEl: 'learningCount', tag: 'tier:learning' },
+      ];
+
+      let total = 0;
+      tiers.forEach(tier => {
+        const cxus = cxuStore[tier.key] || [];
+        total += cxus.length;
+        document.getElementById(tier.countEl).textContent = cxus.length;
+        const el = document.getElementById(tier.el);
+
+        if (cxus.length === 0) {
+          el.innerHTML = '<div class="py-text-muted py-text-sm">No CxUs in this tier</div>';
+          return;
+        }
+
+        el.innerHTML = cxus.map(cxu => {
+          const obj = cxu.cxu_object || {};
+          const params = obj.parameters ? Object.entries(obj.parameters) : [];
+          return `
+            <div class="cxu-item">
+              <div class="cxu-claim">${escapeHtml(obj.claim || 'No claim')}</div>
+              <div class="cxu-meta">
+                ${typeof CxuPill !== 'undefined' ? CxuPill.render({ cxuId: cxu.cxu_id, alias: cxu.alias }) : `<span class="py-badge py-badge-cxu py-text-xs">${cxu.alias}</span>`}
+                <span class="py-badge py-badge-default py-text-xs">v${cxu.version?.number || '?'}</span>
+                ${obj.metadata?.evidence_strength ? `<span class="py-badge py-badge-default py-text-xs">${obj.metadata.evidence_strength}</span>` : ''}
+              </div>
+              ${params.length > 0 ? `
+                <div style="margin-top:var(--py-space-2);font-family:var(--py-font-mono);font-size:0.75rem;">
+                  ${params.map(([k, v]) => `<span class="py-text-muted">${k}:</span> <span class="py-text-bold">${v.value}</span>${v.min != null ? ` <span class="py-text-muted">[${v.min}-${v.max}]</span>` : ''}`).join(' &middot; ')}
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+      });
+
+      document.getElementById('totalCxuBadge').textContent = `${total} CxUs`;
+      document.getElementById('kpiCxuCount').textContent = total;
+    }
+
+    // ─── Load CxUs from local files ─────────────────────────────────
+    async function loadCxUs() {
+      try {
+        const resp = await fetch('/pyrana-objects/cxus/');
+        if (!resp.ok) {
+          // Try loading individual known files
+          const knownFiles = [
+            'axiom-fee-kill.json', 'axiom-hold-default.json',
+            'axiom-signal-direction-broken.json', 'axiom-max-size-or-skip.json',
+            'regime-ranging.json', 'regime-trending.json', 'regime-volatile.json',
+            'playbook-ranging.json', 'playbook-trending.json', 'playbook-volatile.json',
+            'learning-signal-accuracy-by-type.json', 'learning-strategy-performance.json'
+          ];
+          const cxus = [];
+          for (const f of knownFiles) {
+            try {
+              const r = await fetch(`/pyrana-objects/cxus/${f}`);
+              if (r.ok) cxus.push(await r.json());
+            } catch (e) { /* skip */ }
+          }
+          categorizeCxUs(cxus);
+          return;
+        }
+        // If directory listing works, parse it
+        const text = await resp.text();
+        const files = text.match(/href="([^"]+\.json)"/g)?.map(m => m.match(/href="([^"]+)"/)[1]) || [];
+        const cxus = [];
+        for (const f of files) {
+          try {
+            const r = await fetch(`/pyrana-objects/cxus/${f}`);
+            if (r.ok) cxus.push(await r.json());
+          } catch (e) { /* skip */ }
+        }
+        categorizeCxUs(cxus);
+      } catch (e) {
+        console.warn('Could not load CxUs:', e);
+      }
+    }
+
+    function categorizeCxUs(cxus) {
+      cxuStore = { axioms: [], regime_models: [], playbooks: [], learnings: [] };
+      cxus.forEach(cxu => {
+        const tags = cxu.mutable_metadata?.tags || [];
+        if (tags.includes('tier:axiom')) cxuStore.axioms.push(cxu);
+        else if (tags.includes('tier:regime-model')) cxuStore.regime_models.push(cxu);
+        else if (tags.includes('tier:playbook')) cxuStore.playbooks.push(cxu);
+        else if (tags.includes('tier:learning')) cxuStore.learnings.push(cxu);
+        else cxuStore.learnings.push(cxu); // default
+      });
+      renderKnowledge();
+    }
+
+    // ─── Trade history ──────────────────────────────────────────────
+    async function loadTradeHistory() {
+      try {
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/trades`);
+        if (resp.ok) {
+          const data = await resp.json();
+          tradeHistory = data.trades || data || [];
+          renderTradeHistory();
+        }
+      } catch (e) { /* trading server not available */ }
+    }
+
+    function renderTradeHistory() {
+      document.getElementById('tradeCount').textContent = `${tradeHistory.length} trades`;
+      const tbody = document.getElementById('tradeHistoryBody');
+      if (tradeHistory.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="py-text-muted" style="text-align:center">No trades yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = tradeHistory.slice().reverse().map(t => {
+        const actionColor = t.action?.includes('long') ? 'hsl(var(--py-success))' :
+          t.action?.includes('short') ? 'hsl(var(--py-error))' : 'hsl(var(--py-warning))';
+        const pnlColor = (t.pnl || 0) >= 0 ? 'hsl(var(--py-success))' : 'hsl(var(--py-error))';
+        const citations = t.citations || [];
+        return `
+          <tr>
+            <td>${timeAgo(t.timestamp)}</td>
+            <td style="color:${actionColor};font-weight:600;">${(t.action || '--').toUpperCase()}</td>
+            <td>${t.size || '--'}</td>
+            <td>$${Number(t.price || 0).toFixed(2)}</td>
+            <td style="color:${pnlColor}">${formatCurrency(t.pnl || 0)}</td>
+            <td>$${(t.fee || 0).toFixed(2)}</td>
+            <td><span class="regime-badge regime-${(t.regime || 'unknown').toLowerCase()}" style="font-size:0.7rem;">${t.regime || '?'}</span></td>
+            <td>${citations.map(c => typeof CxuPill !== 'undefined' ? CxuPill.render({cxuId: c.cxu_id, alias: c.alias}) : `<span class="py-badge py-badge-cxu py-text-xs">${c.alias}</span>`).join(' ')}</td>
+            <td class="py-text-xs" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(t.rationale || '')}">${escapeHtml(t.rationale || '--')}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    // ─── Reflection ─────────────────────────────────────────────────
+    function handleReflection(msg) {
+      reflectionHistory.unshift(msg);
+      renderReflection();
+    }
+
+    async function loadReflectionHistory() {
+      try {
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/reflection/history`);
+        if (resp.ok) {
+          const data = await resp.json();
+          reflectionHistory = data.history || data || [];
+          renderReflection();
+        }
+      } catch (e) { /* not available */ }
+    }
+
+    function renderReflection() {
+      document.getElementById('reflectionCycle').textContent = reflectionHistory.length;
+
+      let created = 0, updated = 0, pending = 0;
+      reflectionHistory.forEach(r => {
+        created += r.cxusCreated || 0;
+        updated += r.cxusUpdated || 0;
+        pending += r.pendingHumanReview || 0;
+      });
+      document.getElementById('reflCxuCreated').textContent = created;
+      document.getElementById('reflCxuUpdated').textContent = updated;
+      document.getElementById('reflPendingReview').textContent = pending;
+
+      const timeline = document.getElementById('reflectionTimeline');
+      if (reflectionHistory.length === 0) {
+        timeline.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">&#128161;</div>
+            <div>No reflection cycles yet</div>
+            <div class="py-text-xs py-text-muted" style="margin-top:var(--py-space-2)">The reflector agent analyzes trade outcomes and proposes CxU updates</div>
+          </div>`;
+        return;
+      }
+
+      timeline.innerHTML = reflectionHistory.slice(0, 20).map(r => `
+        <div class="reflection-entry">
+          <div class="reflection-header">
+            <div>
+              <span class="py-text-bold">Cycle ${r.cycle || '?'}</span>
+              <span class="py-text-xs py-text-muted" style="margin-left:var(--py-space-2)">${r.timestamp ? new Date(r.timestamp).toLocaleString() : '--'}</span>
+            </div>
+            <div style="display:flex;gap:var(--py-space-2);">
+              ${r.cxusCreated ? `<span class="py-badge py-badge-success py-text-xs">+${r.cxusCreated} created</span>` : ''}
+              ${r.cxusUpdated ? `<span class="py-badge py-badge-info py-text-xs">${r.cxusUpdated} updated</span>` : ''}
+              ${r.pendingHumanReview ? `<span class="py-badge py-badge-warning py-text-xs">${r.pendingHumanReview} needs review</span>` : ''}
+            </div>
+          </div>
+          <div class="py-text-sm">${escapeHtml(r.summary || r.reasoning || 'No summary')}</div>
+          ${r.changes && r.changes.length > 0 ? `
+            <div class="reflection-changes">
+              <span class="py-text-xs py-text-bold">CxU Changes:</span>
+              ${r.changes.map(c => `
+                <div class="cxu-diff">
+                  <div><span class="py-text-muted">Before:</span> ${escapeHtml(c.before || '--')}</div>
+                  <div><span class="py-text-muted">After:</span> ${escapeHtml(c.after || '--')}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    // ─── Agent output ───────────────────────────────────────────────
+    function renderAgentOutput() {
+      const grid = document.getElementById('agentOutputGrid');
+      const agents = ['regime-classifier', 'signal-assessor', 'trade-decider', 'reflector'];
+
+      grid.innerHTML = agents.map(agentId => {
+        const output = agentOutputs[agentId];
+        return `
+          <div class="py-card">
+            <div class="py-card-header py-card-header-agent">
+              <span class="py-text-bold">${agentId.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')}</span>
+              ${output ? `<span class="py-badge py-badge-success py-text-xs">output</span>` : `<span class="py-badge py-badge-default py-text-xs">waiting</span>`}
+            </div>
+            <div class="py-card-content" id="agent-output-${agentId}">
+              ${output ? '' : '<div class="py-text-muted py-text-sm">No output yet</div>'}
+            </div>
+          </div>`;
+      }).join('');
+
+      // Initialize OutputViewerPanels for agents with output
+      agents.forEach(agentId => {
+        const output = agentOutputs[agentId];
+        if (output && typeof OutputViewerPanel !== 'undefined') {
+          const container = document.getElementById(`agent-output-${agentId}`);
+          if (container) {
+            const panel = OutputViewerPanel.create(container, {
+              title: agentId,
+              onCxuClick: (cxuId) => {
+                if (typeof PyranaLibrary !== 'undefined') PyranaLibrary.openItem(cxuId, 'cxu_manager');
+              }
+            });
+            panel.setOutput(output);
+          }
+        }
+      });
+    }
+
+    // ─── Actions ────────────────────────────────────────────────────
+    async function toggleAutoTrade() {
+      try {
+        await fetch(`${CONFIG.tradingServerUrl}/api/autotrade/toggle`, { method: 'POST' });
+      } catch (e) { console.warn('Could not toggle auto trade'); }
+    }
+
+    async function toggleAutoBuy() {
+      try {
+        await fetch(`${CONFIG.tradingServerUrl}/api/agdel/autobuy`, { method: 'POST' });
+      } catch (e) { console.warn('Could not toggle auto buy'); }
+    }
+
+    async function buySignal(hash) {
+      try {
+        await fetch(`${CONFIG.tradingServerUrl}/api/agdel/buy`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ commitmentHash: hash })
+        });
+      } catch (e) { console.warn('Could not buy signal'); }
+    }
+
+    async function triggerReflection() {
+      try {
+        await fetch(`${CONFIG.tradingServerUrl}/api/reflection/trigger`, { method: 'POST' });
+      } catch (e) { console.warn('Could not trigger reflection'); }
+    }
+
+    // ─── Utils ──────────────────────────────────────────────────────
+    function formatCurrency(val) {
+      const n = Number(val) || 0;
+      return (n >= 0 ? '' : '-') + '$' + Math.abs(n).toFixed(2);
+    }
+
+    function timeAgo(ts) {
+      if (!ts) return '--';
+      const now = Date.now();
+      const then = new Date(ts).getTime();
+      const diff = (now - then) / 1000;
+      if (diff < 60) return `${Math.floor(diff)}s ago`;
+      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+      return `${Math.floor(diff / 86400)}d ago`;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ─── Init ───────────────────────────────────────────────────────
+    async function init() {
+      // Load CxUs from local files
+      await loadCxUs();
+
+      // Initialize Library tray
+      try {
+        if (typeof PyranaLibrary !== 'undefined') {
+          PyranaLibrary.init(document.getElementById('libraryContainer'), {
+            apiBases: {
+              cxu: 'http://localhost:8001',
+              script: 'http://localhost:8002',
+              prompt: 'http://localhost:8003',
+              agent: 'http://localhost:8105'
+            },
+            requiredTag: 'agdel-trader-bot'
+          });
+        }
+      } catch (e) { console.warn('Library init failed (services may not be running)'); }
+
+      // Connect WebSocket to trading server
+      connectWs();
+
+      // Initial data loads
+      loadTradeHistory();
+      loadReflectionHistory();
+      renderAgentOutput();
+
+      // Polling
+      setInterval(loadTradeHistory, 10000);
+      setInterval(loadReflectionHistory, 30000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
