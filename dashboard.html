@@ -1300,12 +1300,13 @@
       const ctx = canvas.getContext('2d');
       const rect = canvas.parentElement.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = 400 * dpr;
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = '400px';
-      ctx.scale(dpr, dpr);
-      const W = rect.width, H = 400;
+      const W = Math.floor(rect.width);
+      const H = 400;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // Background
       ctx.fillStyle = 'hsl(222 47% 6%)';
@@ -1339,11 +1340,13 @@
       const margin = { top: 20, right: 75, bottom: 30, left: 10 };
       const plotW = W - margin.left - margin.right;
       const plotH = H - margin.top - margin.bottom;
-      const baseCandleW = plotW / 120;
+      // Reserve right 25% for signal projection zone
+      const candleZoneW = plotW * 0.75;
+      const baseCandleW = candleZoneW / 120;
       const candleWidth = Math.max(2, Math.min(20, baseCandleW * chartZoom));
       const gap = Math.max(1, candleWidth * 0.3);
       const step = candleWidth + gap;
-      const maxCandles = Math.floor(plotW / step);
+      const maxCandles = Math.floor(candleZoneW / step);
 
       // Pan: offset from the end
       const endIdx = Math.max(maxCandles, candles.length - chartPanOffset);
@@ -1529,11 +1532,26 @@
         ctx.fillText(priceLabel, W - margin.right + 5, nowY + 4);
       }
 
+      // "Now" divider between candles and projection zone
+      {
+        const divX = margin.left + candleZoneW;
+        ctx.strokeStyle = 'hsla(220, 50%, 50%, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 5]);
+        ctx.beginPath(); ctx.moveTo(divX, margin.top); ctx.lineTo(divX, H - margin.bottom); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '8px monospace';
+        ctx.fillStyle = 'hsla(220, 50%, 50%, 0.4)';
+        ctx.textAlign = 'center';
+        ctx.fillText('NOW', divX, margin.top - 5);
+      }
+
       // Signal gravity dots — each prediction as a circle at its target price
       // Projected to the right of the last candle, like the old gravity chart
       if (visible.length > 0 && predictions.length > 0) {
         const lastCandleX = margin.left + (visible.length - 1) * step + candleWidth / 2;
-        const projectionZone = W - margin.right - lastCandleX;  // Available space to the right
+        const projectionZone = plotW * 0.25;  // Right 25% reserved for signal projection
+        const projectionStart = margin.left + candleZoneW;
 
         // Filter active predictions within a reasonable range of current price
         const priceBand = (maxP - minP) * 1.5;  // Allow some overflow
@@ -1555,7 +1573,7 @@
 
           // Position: X based on horizon, Y based on target price
           const hzFrac = hzOrder[hz] || 0.5;
-          const dotX = lastCandleX + projectionZone * hzFrac + (Math.random() - 0.5) * 8;
+          const dotX = projectionStart + projectionZone * hzFrac + (Math.random() - 0.5) * 8;
           const dotY = toY(target);
 
           // Skip if outside visible Y range
@@ -1618,7 +1636,7 @@
         ctx.fillStyle = 'hsl(222 10% 35%)';
         ctx.textAlign = 'center';
         for (const [hz, frac] of Object.entries(hzOrder)) {
-          const x = lastCandleX + projectionZone * frac;
+          const x = projectionStart + projectionZone * frac;
           ctx.fillText(hz, x, H - margin.bottom + 14);
         }
       }
