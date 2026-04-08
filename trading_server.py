@@ -422,32 +422,53 @@ async def _run_tick():
     position = await hl_trader.get_position()
     pos_dict = position.to_dict() if hasattr(position, "to_dict") else (position or {})
 
-    # 3. Risk check (always runs, every tick)
+    # 3. Risk check
     if risk_manager and pos_dict.get("side") and pos_dict["side"] != "FLAT":
         risk_levels = risk_manager.get_sl_tp_levels()
 
+        # In training mode, ONLY execute SL/TP if the user explicitly set dollar targets
+        # (override fields). Never auto-close based on agent % defaults.
+        has_user_sl = risk_manager._sl_price_override is not None
+        has_user_tp = risk_manager._tp_price_override is not None
+        allow_sl = has_user_sl or not training_mode
+        allow_tp = has_user_tp or not training_mode
+
         # Stop loss check
-        sl_triggered, sl_reason = risk_manager.check_stop_loss(mark_price)
-        if sl_triggered:
-            logger.info("STOP LOSS triggered at $%.2f: %s", mark_price, sl_reason)
-            result = await hl_trader.execute("close", 100, mark_price)
-            if result and result.success:
-                _record_trade(result, f"SL: {sl_reason}", mark_price)
-                risk_manager.clear_position()
-            return
+        if allow_sl:
+            sl_triggered, sl_reason = risk_manager.check_stop_loss(mark_price)
+            if sl_triggered:
+                logger.info("STOP LOSS triggered at $%.2f: %s", mark_price, sl_reason)
+                result = await hl_trader.execute("close", 100, mark_price)
+                if result and result.success:
+                    _record_trade(result, f"SL: {sl_reason}", mark_price)
+                    risk_manager.clear_position()
+                return
 
         # Take profit check
-        tp_triggered, tp_reason = risk_manager.check_take_profit(mark_price)
-        if tp_triggered:
-            logger.info("TAKE PROFIT triggered at $%.2f: %s", mark_price, tp_reason)
-            result = await hl_trader.execute("close", 100, mark_price)
-            if result and result.success:
-                _record_trade(result, f"TP: {tp_reason}", mark_price)
-                risk_manager.clear_position()
-            return
+        if allow_tp:
+            tp_triggered, tp_reason = risk_manager.check_take_profit(mark_price)
+            if tp_triggered:
+                logger.info("TAKE PROFIT triggered at $%.2f: %s", mark_price, tp_reason)
+                result = await hl_trader.execute("close", 100, mark_price)
+                if result and result.success:
+                    _record_trade(result, f"TP: {tp_reason}", mark_price)
+                    risk_manager.clear_position()
+                return
 
         # Update watermarks
         risk_manager.update_watermark(mark_price)
+
+    # 3b. Ratchet TP check (works in training mode — user explicitly activates it)
+    if ratchet_tp and ratchet_tp.active:
+        triggered, reason = ratchet_tp.update(mark_price)
+        if triggered:
+            logger.info("RATCHET TP triggered at $%.2f: %s", mark_price, reason)
+            result = await hl_trader.execute("close", 100, mark_price)
+            if result and result.success:
+                _record_trade(result, f"Ratchet TP: {reason}", mark_price)
+                if risk_manager:
+                    risk_manager.clear_position()
+            return
 
     # 4. Rate limit — only run agent pipeline at decision interval
     min_interval = config.get("agentPipeline", {}).get("minDecisionIntervalMs", 120000) / 1000
@@ -491,8 +512,9 @@ async def _run_tick():
         last_decision_time = now
 
         # Execute if auto-trade enabled and action is not hold
+        # NEVER execute when training mode is on — the human controls the position
         action = decision_output.data.get("action", "hold")
-        if auto_trade and action != "hold" and decision_output.success:
+        if auto_trade and not training_mode and action != "hold" and decision_output.success:
             # Sentiment gate
             blocked = False
             if sentiment_bias and config.get("sentimentBias", {}).get("enabled"):
@@ -792,6 +814,7 @@ async def _broadcast_state(mark_price: float, position: dict):
 
         # Risk
         "riskLevels": risk_manager.get_sl_tp_levels() if risk_manager else {},
+        "ratchetTp": ratchet_tp.get_status() if ratchet_tp else {},
 
         # Signals
         "predictions": direct_predictions[:50],
@@ -1022,6 +1045,87 @@ async def toggle_autotrade():
     return {"autoTrade": auto_trade}
 
 
+@app.post("/api/risk/ratchet")
+async def activate_ratchet(body: dict):
+    """Activate ratcheting take-profit on current position.
+
+    Body:
+        wide: true for multi-hour runs (wider buffer, default true)
+    """
+    if not ratchet_tp or not hl_trader:
+        return JSONResponse({"error": "Not initialized"}, status_code=400)
+
+    position = await hl_trader.get_position()
+    if not position or position.side == "flat":
+        return JSONResponse({"error": "No open position"}, status_code=400)
+
+    wide = body.get("wide", True)
+    fee_estimate = abs(position.size) * position.entry_price * 0.000432  # one-side fee
+
+    ratchet_tp.activate(
+        side=position.side,
+        entry_price=position.entry_price,
+        fee_estimate=fee_estimate,
+        wide=wide,
+    )
+
+    status = ratchet_tp.get_status()
+    return {
+        "success": True,
+        "ratchet": status,
+        "message": f"Ratchet TP active: {status['phase']} phase, TP=${status['tp_price']:.2f}, {'wide' if wide else 'tight'} mode",
+    }
+
+
+@app.get("/api/risk/ratchet")
+async def get_ratchet_status():
+    if not ratchet_tp:
+        return {"active": False}
+    return ratchet_tp.get_status()
+
+
+@app.post("/api/risk/set")
+async def set_risk_targets(body: dict):
+    """Set SL/TP by dollar P&L targets.
+
+    Body:
+        tpDollars: take profit target in dollars (e.g., 300 = close at +$300)
+        slDollars: stop loss target in dollars (e.g., 500 = close at -$500)
+    """
+    if not risk_manager or not hl_trader:
+        return JSONResponse({"error": "Not initialized"}, status_code=400)
+
+    position = await hl_trader.get_position()
+    if not position or position.side == "flat":
+        return JSONResponse({"error": "No open position"}, status_code=400)
+
+    pos_size = abs(position.size)
+    tp = body.get("tpDollars")
+    sl = body.get("slDollars")
+
+    if tp is not None:
+        tp = abs(float(tp))
+    if sl is not None:
+        sl = abs(float(sl))
+
+    risk_manager.set_dollar_targets(pos_size, tp_dollars=tp, sl_dollars=sl)
+
+    levels = risk_manager.get_sl_tp_levels()
+
+    # Broadcast updated state immediately
+    mark_price = await hl_trader.get_mark_price()
+    pos_dict = position.to_dict()
+    await _broadcast_state(mark_price, pos_dict)
+
+    return {
+        "success": True,
+        "position": {"side": position.side, "size": pos_size, "entryPrice": position.entry_price},
+        "slPrice": levels.get("slPrice"),
+        "tpPrice": levels.get("tpPrice"),
+        "message": f"SL=${levels.get('slPrice', 0):.2f} TP=${levels.get('tpPrice', 0):.2f}",
+    }
+
+
 @app.post("/api/close")
 async def close_position():
     if not hl_trader:
@@ -1052,11 +1156,25 @@ async def set_mode(body: dict):
     if not hl_trader:
         return JSONResponse({"error": "No trader"}, status_code=400)
     mode = body.get("mode", "paper")
-    if mode in ("paper", "live"):
+    if mode not in ("paper", "live"):
+        return JSONResponse({"error": "Invalid mode"}, status_code=400)
+
+    # Initialize live SDK if switching to live for the first time
+    if mode == "live" and not hl_trader._exchange:
+        try:
+            old_mode = hl_trader.mode
+            hl_trader.mode = "live"
+            await hl_trader.connect()
+            logger.info("Live SDK initialized on mode switch")
+        except Exception as e:
+            hl_trader.mode = old_mode if 'old_mode' in dir() else "paper"
+            logger.error("Failed to init live SDK: %s", e)
+            return JSONResponse({"error": f"Live SDK init failed: {e}"}, status_code=500)
+    else:
         hl_trader.mode = mode
-        logger.info("Mode switched to %s", mode)
-        return {"mode": mode}
-    return JSONResponse({"error": "Invalid mode"}, status_code=400)
+
+    logger.info("Mode switched to %s", mode)
+    return {"mode": mode}
 
 
 @app.post("/api/reflection/trigger")

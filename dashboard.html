@@ -418,7 +418,7 @@
   <header class="app-header">
     <div class="app-header-left">
       <span class="app-title">AgDel Trader Bot</span>
-      <span class="py-badge py-badge-info" id="modeBadge">PAPER</span>
+      <button id="modeBadge" onclick="toggleMode()" style="cursor:pointer;border:1px solid hsl(var(--py-info));background:hsl(var(--py-info) / 0.2);color:hsl(var(--py-info));font-weight:700;font-size:0.75rem;padding:4px 12px;border-radius:4px;letter-spacing:0.05em;">PAPER</button>
       <span style="display:flex;align-items:center;gap:4px;">
         <span class="status-dot status-disconnected" id="wsStatus"></span>
         <span class="py-text-xs py-text-muted" id="wsLabel">Disconnected</span>
@@ -993,14 +993,19 @@
 
     // ─── Render all ─────────────────────────────────────────────────
     function renderAll() {
-      renderMarketStrip();
-      renderKpis();
-      renderDecision();
-      renderPositionCards();
-      renderCandlestickChart();
-      renderExchangePrices();
-      renderSignals();
-      renderMacroSentiment();
+      const fns = [
+        renderMarketStrip,
+        renderKpis,
+        renderDecision,
+        renderPositionCards,
+        renderCandlestickChart,
+        renderExchangePrices,
+        renderSignals,
+        renderMacroSentiment,
+      ];
+      for (const fn of fns) {
+        try { fn(); } catch (e) { console.warn(`renderAll: ${fn.name} failed:`, e); }
+      }
     }
 
     // ─── Market strip ───────────────────────────────────────────────
@@ -1035,7 +1040,14 @@
       document.getElementById('activePlaybook').textContent = state.strategy?.activePlaybook || '--';
 
       // Mode
-      document.getElementById('modeBadge').textContent = (state.tradingMode || 'PAPER').toUpperCase();
+      const modeEl = document.getElementById('modeBadge');
+      const mode = (state.tradingMode || 'paper').toLowerCase();
+      modeEl.textContent = mode.toUpperCase();
+      if (mode === 'live') {
+        modeEl.style.cssText = 'cursor:pointer;border:1px solid hsl(var(--py-error));background:hsl(var(--py-error) / 0.2);color:hsl(var(--py-error));font-weight:700;font-size:0.75rem;padding:4px 12px;border-radius:4px;letter-spacing:0.05em;';
+      } else {
+        modeEl.style.cssText = 'cursor:pointer;border:1px solid hsl(var(--py-info));background:hsl(var(--py-info) / 0.2);color:hsl(var(--py-info));font-weight:700;font-size:0.75rem;padding:4px 12px;border-radius:4px;letter-spacing:0.05em;';
+      }
 
       // Equity
       const equity = state.hlPortfolio?.equity || state.portfolio?.equity || 0;
@@ -1191,8 +1203,19 @@
         el.className = 'mark-price ' + (price > prev ? 'price-up' : price < prev ? 'price-down' : 'price-flat');
       }
 
-      // Re-render chart
+      // Update exchange prices + basis from this message
+      if (msg.exchanges) lastPriceUpdateExchanges = msg.exchanges;
+      if (msg.basis) {
+        lastPriceUpdateBasis = msg.basis;
+        if (msg.basis.basis !== undefined) {
+          basisHistory.push({t: msg.timestamp, basis: msg.basis.basis, pct: msg.basis.basisPct});
+          if (basisHistory.length > 500) basisHistory.shift();
+        }
+      }
+
+      // Re-render chart + exchanges
       renderCandlestickChart();
+      renderExchangePrices();
     }
 
     // ─── Timeframe switching ────────────────────────────────────────
@@ -1668,22 +1691,6 @@
     let lastPriceUpdateExchanges = null;
     let lastPriceUpdateBasis = null;
 
-    // Hook into price update handler to capture exchange data
-    const _origHandlePriceUpdate = handlePriceUpdate;
-    handlePriceUpdate = function(msg) {
-      if (msg.exchanges) lastPriceUpdateExchanges = msg.exchanges;
-      if (msg.basis) {
-        lastPriceUpdateBasis = msg.basis;
-        // Record basis history
-        if (msg.basis.basis !== undefined) {
-          basisHistory.push({t: msg.timestamp, basis: msg.basis.basis, pct: msg.basis.basisPct});
-          if (basisHistory.length > 500) basisHistory.shift();
-        }
-      }
-      _origHandlePriceUpdate(msg);
-      renderExchangePrices();
-    };
-
     // ─── Macro sentiment ─────────────────────────────────────────────
     function renderMacroSentiment() {
       const macro = state.macroSentiment;
@@ -1873,13 +1880,13 @@
       } else {
         aBody.innerHTML = available.slice(0, 50).map(s => `
           <tr>
-            <td>${s.expiresIn || timeAgo(s.expiryTime)}</td>
-            <td>${s.horizon || '--'}</td>
-            <td>${s.signalType || s.type || '--'}</td>
-            <td title="${s.makerAddress || ''}">${(s.makerAddress || '').slice(0, 8)}...</td>
-            <td>$${(s.costUsdc || 0).toFixed(2)}</td>
+            <td>${s.expiresIn ? s.expiresIn + 's' : timeAgo(s.expiryTime || s.createdAt)}</td>
+            <td>${s.horizon || s.horizon_bucket || '--'}</td>
+            <td>${s.signalType || s.signal_type || s.type || '--'}</td>
+            <td title="${s.makerFull || s.makerAddress || s.maker || ''}">${(s.maker || s.makerAddress || '').slice(0, 10)}...</td>
+            <td>$${(s.cost || s.costUsdc || s.cost_usdc || 0).toFixed(3)}</td>
             <td>${(s.confidence || 0).toFixed(2)}</td>
-            <td>${(s.qualityScore || 0).toFixed(2)}</td>
+            <td>${(s.quality || s.qualityScore || 0).toFixed(2)}</td>
             <td>${s.winRate ? (s.winRate * 100).toFixed(0) + '%' : '--'}</td>
             <td><button class="py-btn py-btn-xs py-btn-cxu" onclick="buySignal('${s.commitmentHash}')">Buy</button></td>
           </tr>
@@ -2344,6 +2351,31 @@
     }
 
     // ─── Actions ────────────────────────────────────────────────────
+    async function toggleMode() {
+      const current = (state.tradingMode || 'paper').toLowerCase();
+      const next = current === 'live' ? 'paper' : 'live';
+      if (next === 'live') {
+        if (!confirm('Switch to LIVE mode? Real orders will be placed on Hyperliquid.')) return;
+      }
+      try {
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/config/mode`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: next }),
+        });
+        if (resp.ok) {
+          state.tradingMode = next;
+          const modeEl = document.getElementById('modeBadge');
+          modeEl.textContent = next.toUpperCase();
+          if (next === 'live') {
+            modeEl.style.cssText = 'cursor:pointer;border:1px solid hsl(var(--py-error));background:hsl(var(--py-error) / 0.2);color:hsl(var(--py-error));font-weight:700;font-size:0.75rem;padding:4px 12px;border-radius:4px;letter-spacing:0.05em;';
+          } else {
+            modeEl.style.cssText = 'cursor:pointer;border:1px solid hsl(var(--py-info));background:hsl(var(--py-info) / 0.2);color:hsl(var(--py-info));font-weight:700;font-size:0.75rem;padding:4px 12px;border-radius:4px;letter-spacing:0.05em;';
+          }
+        }
+      } catch (e) { console.warn('Could not switch mode'); }
+    }
+
     async function toggleAutoTrade() {
       try {
         await fetch(`${CONFIG.tradingServerUrl}/api/autotrade/toggle`, { method: 'POST' });
