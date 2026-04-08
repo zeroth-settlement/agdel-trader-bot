@@ -479,83 +479,32 @@
 
   <!-- Tab: Trading -->
   <div class="tab-panel active" id="tab-trading">
-    <!-- KPI Row -->
-    <div class="kpi-row">
-      <div class="kpi-card">
-        <div class="kpi-label">Net P&L</div>
-        <div class="kpi-value" id="kpiPnl">$0.00</div>
+
+    <!-- 1. Position Tracker (top — always visible when in a position) -->
+    <div class="py-card" id="positionTracker" style="margin-bottom:var(--py-space-4);display:none;">
+      <div class="py-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="py-text-sm py-text-bold">Position Tracker</span>
+        <span class="py-text-xs py-text-muted" id="posTrackerSide">--</span>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Win Rate</div>
-        <div class="kpi-value" id="kpiWinRate">--%</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Total Trades</div>
-        <div class="kpi-value" id="kpiTotalTrades">0</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Fee Drag</div>
-        <div class="kpi-value" id="kpiFeeDrag">$0.00</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Active CxUs</div>
-        <div class="kpi-value" id="kpiCxuCount">0</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Trades Today</div>
-        <div class="kpi-value" id="kpiTradesToday">0</div>
+      <div class="py-card-content">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--py-space-3);font-family:var(--py-font-mono);font-size:0.85rem;">
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Entry</span><span id="ptEntry">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Mark</span><span id="ptMark">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Breakeven</span><span id="ptBreakeven">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Distance</span><span id="ptDistance">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Gross P&L</span><span id="ptGrossPnl">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">RT Fees</span><span id="ptFees">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Net P&L</span><span id="ptNetPnl">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Liq. Price</span><span id="ptLiqPrice">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Size</span><span id="ptSize">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Notional</span><span id="ptNotional">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Leverage</span><span id="ptLeverage">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Liq. Buffer</span><span id="ptLiqBuffer">--</span></div>
+        </div>
       </div>
     </div>
 
-    <!-- Macro Sentiment Panel (collapsible) -->
-    <div class="macro-panel" id="macroPanel">
-      <div class="macro-header" style="cursor:pointer;" onclick="var b=document.getElementById('macroBody');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.collapse-arrow').textContent=b.style.display==='none'?'▶':'▼';">
-        <div style="display:flex;align-items:center;gap:var(--py-space-3);">
-          <span class="collapse-arrow" style="font-size:1rem;color:hsl(var(--py-fg-muted));">▼</span>
-          <span class="py-text-sm py-text-bold">Macro Sentiment</span>
-          <span class="macro-bias-badge macro-neutral" id="macroBias">LOADING</span>
-          <span class="py-text-xs py-text-muted" id="macroHoldingAdj"></span>
-        </div>
-        <div style="display:flex;align-items:center;gap:var(--py-space-2);">
-          <span class="py-text-xs py-text-muted" id="macroLastUpdate">--</span>
-          <button class="py-btn py-btn-xs py-btn-ghost" onclick="refreshMacro()">Refresh</button>
-        </div>
-      </div>
-      <div id="macroBody" style="display:none;">
-      <!-- Gauge: bearish ← → bullish -->
-      <div class="macro-gauge" id="macroGauge">
-        <div class="macro-gauge-fill" id="macroGaugeFill" style="width:50%;background:hsl(var(--py-fg-muted));"></div>
-        <div class="macro-gauge-marker" id="macroGaugeMarker" style="left:50%;"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:2px;">
-        <span class="py-text-xs" style="color:hsl(var(--py-error));">Bearish</span>
-        <span class="py-text-xs" style="color:hsl(var(--py-success));">Bullish</span>
-      </div>
-      <div class="macro-indicators" id="macroIndicators" style="margin-top:var(--py-space-2);">
-        <div class="macro-indicator"><span class="macro-indicator-label">Loading...</span></div>
-      </div>
-      </div><!-- /macroBody -->
-    </div>
-
-    <!-- Exchange Price Comparison -->
-    <div class="exchange-panel" id="exchangePanel">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="display:flex;align-items:center;gap:var(--py-space-3);">
-          <span class="py-text-sm py-text-bold">Cross-Exchange ETH</span>
-          <span class="basis-signal basis-flat" id="basisSignal">--</span>
-        </div>
-        <span class="py-text-xs py-text-muted" id="basisLabel">Basis: --</span>
-      </div>
-      <div class="exchange-grid" id="exchangeGrid">
-        <div class="py-text-xs py-text-muted">Connecting to exchanges...</div>
-      </div>
-      <div style="margin-top:var(--py-space-2);">
-        <span class="py-text-xs py-text-muted">Basis Spread (Binance Perps − Hyperliquid)</span>
-        <canvas id="basisCanvas" style="width:100%;height:60px;margin-top:4px;"></canvas>
-      </div>
-    </div>
-
-    <!-- Training Panel -->
+    <!-- 2. Training Panel (shown when training mode active) -->
     <div class="training-panel" id="trainingPanel">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
@@ -587,7 +536,7 @@
       <div id="trainingResult" style="display:none;margin-top:var(--py-space-2);"></div>
     </div>
 
-    <!-- Price Chart (Candlestick + Predictions) -->
+    <!-- 3. Price Chart -->
     <div class="chart-container">
       <div class="chart-toolbar">
         <div style="display:flex;align-items:center;gap:var(--py-space-3);">
@@ -609,7 +558,7 @@
       <canvas class="chart-canvas" id="priceCanvas"></canvas>
     </div>
 
-    <!-- Decision Card -->
+    <!-- 4. Latest Decision -->
     <div class="decision-card">
       <div class="decision-header">
         <span class="py-text-sm py-text-bold">Latest Decision</span>
@@ -625,51 +574,63 @@
       </div>
     </div>
 
-    <!-- Position Tracker (detailed) -->
-    <div class="py-card" id="positionTracker" style="margin-bottom:var(--py-space-4);display:none;">
-      <div class="py-card-header" style="display:flex;justify-content:space-between;align-items:center;">
-        <span class="py-text-sm py-text-bold">Position Tracker</span>
-        <span class="py-text-xs py-text-muted" id="posTrackerSide">--</span>
+    <!-- 5. 24h Metrics -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">24h Net P&L</div>
+        <div class="kpi-value" id="kpiPnl">$0.00</div>
       </div>
-      <div class="py-card-content">
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--py-space-3);font-family:var(--py-font-mono);font-size:0.85rem;">
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Entry</span><span id="ptEntry">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Mark</span><span id="ptMark">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Breakeven</span><span id="ptBreakeven">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Distance</span><span id="ptDistance">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Gross P&L</span><span id="ptGrossPnl">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">RT Fees</span><span id="ptFees">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Net P&L</span><span id="ptNetPnl">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Liq. Price</span><span id="ptLiqPrice">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Size</span><span id="ptSize">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Notional</span><span id="ptNotional">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Leverage</span><span id="ptLeverage">--</span></div>
-          <div><span class="py-text-xs py-text-muted" style="display:block;">Liq. Buffer</span><span id="ptLiqBuffer">--</span></div>
+      <div class="kpi-card">
+        <div class="kpi-label">Win Rate</div>
+        <div class="kpi-value" id="kpiWinRate">--%</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Trade Count</div>
+        <div class="kpi-value" id="kpiTotalTrades">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Fee Drag</div>
+        <div class="kpi-value" id="kpiFeeDrag">$0.00</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Active CxUs</div>
+        <div class="kpi-value" id="kpiCxuCount">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Trades Today</div>
+        <div class="kpi-value" id="kpiTradesToday">0</div>
+      </div>
+    </div>
+
+    <!-- 6. Macro Sentiment + AI Analysis -->
+    <div class="macro-panel" id="macroPanel">
+      <div class="macro-header" style="cursor:pointer;" onclick="var b=document.getElementById('macroBody');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.collapse-arrow').textContent=b.style.display==='none'?'▶':'▼';">
+        <div style="display:flex;align-items:center;gap:var(--py-space-3);">
+          <span class="collapse-arrow" style="font-size:1rem;color:hsl(var(--py-fg-muted));">▼</span>
+          <span class="py-text-sm py-text-bold">Macro Sentiment</span>
+          <span class="macro-bias-badge macro-neutral" id="macroBias">LOADING</span>
+          <span class="py-text-xs py-text-muted" id="macroHoldingAdj"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--py-space-2);">
+          <span class="py-text-xs py-text-muted" id="macroLastUpdate">--</span>
+          <button class="py-btn py-btn-xs py-btn-ghost" onclick="event.stopPropagation();refreshMacro();">Refresh</button>
+        </div>
+      </div>
+      <div id="macroBody" style="display:none;">
+        <div class="macro-gauge" id="macroGauge">
+          <div class="macro-gauge-fill" id="macroGaugeFill" style="width:50%;background:hsl(var(--py-fg-muted));"></div>
+          <div class="macro-gauge-marker" id="macroGaugeMarker" style="left:50%;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:2px;">
+          <span class="py-text-xs" style="color:hsl(var(--py-error));">Bearish</span>
+          <span class="py-text-xs" style="color:hsl(var(--py-success));">Bullish</span>
+        </div>
+        <div class="macro-indicators" id="macroIndicators" style="margin-top:var(--py-space-2);">
+          <div class="macro-indicator"><span class="macro-indicator-label">Loading...</span></div>
         </div>
       </div>
     </div>
 
-    <!-- Position Detail -->
-    <div class="position-card">
-      <div class="py-card">
-        <div class="py-card-header"><span class="py-text-sm py-text-bold">Risk Levels</span></div>
-        <div class="py-card-content" id="riskLevels">
-          <div class="py-text-muted py-text-sm">No open position</div>
-        </div>
-      </div>
-      <div class="py-card">
-        <div class="py-card-header"><span class="py-text-sm py-text-bold">Signal Summary</span></div>
-        <div class="py-card-content" id="signalSummary">
-          <div class="py-text-muted py-text-sm">Waiting for signals...</div>
-        </div>
-      </div>
-      <div class="py-card">
-        <div class="py-card-header"><span class="py-text-sm py-text-bold">AGDEL Budget</span></div>
-        <div class="py-card-content" id="agdelBudget">
-          <div class="py-text-muted py-text-sm">--</div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- Tab: Signals -->
@@ -1026,7 +987,6 @@
         renderDecision,
         renderPositionCards,
         renderCandlestickChart,
-        renderExchangePrices,
         renderSignals,
         renderMacroSentiment,
       ];
@@ -1058,7 +1018,7 @@
       document.getElementById('unrealizedPnl').textContent = formatCurrency(pos.unrealizedPnl || state.portfolio?.pnl || 0);
 
       // Regime
-      const regime = state.regime?.current || state.regime || 'UNKNOWN';
+      const regime = state.regime?.regime || state.regime?.current || (typeof state.regime === 'string' ? state.regime : null) || 'UNKNOWN';
       const regimeBadge = document.getElementById('regimeBadge');
       regimeBadge.textContent = regime.toUpperCase();
       regimeBadge.className = 'regime-badge regime-' + regime.toLowerCase();
@@ -1288,9 +1248,8 @@
         }
       }
 
-      // Re-render chart + exchanges
+      // Re-render chart
       renderCandlestickChart();
-      renderExchangePrices();
     }
 
     // ─── Timeframe switching ────────────────────────────────────────
@@ -1365,7 +1324,10 @@
       const predictions = state.predictions || [];
       let allPrices = [];
       visible.forEach(c => { allPrices.push(c.h, c.l); });
-      predictions.forEach(p => { if (p.targetPrice) allPrices.push(p.targetPrice); });
+      predictions.forEach(p => {
+        const tp = p.target_price || p.targetPrice;
+        if (tp && !p.expired) allPrices.push(tp);
+      });
       // Include position entry, SL, TP, ratchet so they're always visible on chart
       const _pos = state.position || state.hlPosition || {};
       if (_pos.entryPrice) allPrices.push(_pos.entryPrice);
@@ -1540,33 +1502,100 @@
         ctx.fillText(priceLabel, W - margin.right + 5, nowY + 4);
       }
 
-      // Predictions (from the last candle forward)
-      if (visible.length > 0) {
+      // Signal predictions overlay
+      // Aggregate by direction: compute weighted average target for longs vs shorts
+      if (visible.length > 0 && predictions.length > 0) {
         const lastCandleX = margin.left + (visible.length - 1) * step + candleWidth / 2;
-        predictions.forEach(pred => {
-          if (!pred.targetPrice) return;
-          const color = pred.source === 'agdel' ? 'hsl(220 80% 60%)' : 'hsl(270 60% 60%)';
-          const alpha = pred.expired ? 0.25 : 0.7;
-          ctx.globalAlpha = alpha;
 
-          // Line from current price to target
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 1;
-          ctx.setLineDash([3, 3]);
-          ctx.beginPath();
-          ctx.moveTo(lastCandleX, toY(nowPrice));
-          ctx.lineTo(lastCandleX + 50, toY(pred.targetPrice));
-          ctx.stroke();
+        // Separate by direction, filter active only
+        let longTargets = [], shortTargets = [];
+        predictions.forEach(pred => {
+          const target = pred.target_price || pred.targetPrice;
+          const conf = pred.confidence || pred.cc || 0.5;
+          const dir = (pred.direction || '').toLowerCase();
+          const expired = pred.expired;
+          if (!target || expired) return;
+          if (dir === 'long') longTargets.push({ target, conf });
+          else if (dir === 'short') shortTargets.push({ target, conf });
+        });
+
+        // Draw aggregated long signal band (green)
+        if (longTargets.length > 0) {
+          const weightedSum = longTargets.reduce((s, p) => s + p.target * p.conf, 0);
+          const weightSum = longTargets.reduce((s, p) => s + p.conf, 0);
+          const avgTarget = weightedSum / weightSum;
+          const minTarget = Math.min(...longTargets.map(p => p.target));
+          const maxTarget = Math.max(...longTargets.map(p => p.target));
+
+          // Target zone (min to max)
+          ctx.globalAlpha = 0.08;
+          ctx.fillStyle = 'hsl(145 70% 50%)';
+          const zoneTop = toY(maxTarget);
+          const zoneBot = toY(minTarget);
+          ctx.fillRect(lastCandleX + 5, zoneTop, 60, zoneBot - zoneTop);
+          ctx.globalAlpha = 1;
+
+          // Weighted average line
+          ctx.strokeStyle = 'hsl(145 70% 50%)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 3]);
+          const avgY = toY(avgTarget);
+          ctx.beginPath(); ctx.moveTo(lastCandleX + 5, avgY); ctx.lineTo(lastCandleX + 65, avgY); ctx.stroke();
           ctx.setLineDash([]);
 
-          // Target dot
-          const r = Math.max(3, (pred.qualityScore || 0.5) * 7);
-          ctx.beginPath();
-          ctx.arc(lastCandleX + 50, toY(pred.targetPrice), r, 0, Math.PI * 2);
-          ctx.fillStyle = color;
-          ctx.fill();
+          // Label
+          ctx.font = '9px monospace';
+          ctx.fillStyle = 'hsl(145 70% 50%)';
+          ctx.textAlign = 'left';
+          ctx.fillText(`▲ ${longTargets.length} long → $${avgTarget.toFixed(1)}`, lastCandleX + 5, avgY - 5);
+        }
+
+        // Draw aggregated short signal band (red)
+        if (shortTargets.length > 0) {
+          const weightedSum = shortTargets.reduce((s, p) => s + p.target * p.conf, 0);
+          const weightSum = shortTargets.reduce((s, p) => s + p.conf, 0);
+          const avgTarget = weightedSum / weightSum;
+          const minTarget = Math.min(...shortTargets.map(p => p.target));
+          const maxTarget = Math.max(...shortTargets.map(p => p.target));
+
+          ctx.globalAlpha = 0.08;
+          ctx.fillStyle = 'hsl(0 70% 50%)';
+          const zoneTop = toY(maxTarget);
+          const zoneBot = toY(minTarget);
+          ctx.fillRect(lastCandleX + 5, zoneTop, 60, zoneBot - zoneTop);
           ctx.globalAlpha = 1;
-        });
+
+          ctx.strokeStyle = 'hsl(0 70% 50%)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 3]);
+          const avgY = toY(avgTarget);
+          ctx.beginPath(); ctx.moveTo(lastCandleX + 5, avgY); ctx.lineTo(lastCandleX + 65, avgY); ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.font = '9px monospace';
+          ctx.fillStyle = 'hsl(0 70% 50%)';
+          ctx.textAlign = 'left';
+          ctx.fillText(`▼ ${shortTargets.length} short → $${avgTarget.toFixed(1)}`, lastCandleX + 5, avgY + 12);
+        }
+
+        // Signal consensus bar (bottom right of chart)
+        const totalLong = longTargets.length;
+        const totalShort = shortTargets.length;
+        const total = totalLong + totalShort;
+        if (total > 0) {
+          const longPct = totalLong / total;
+          const barX = W - margin.right - 55;
+          const barY = margin.top + 5;
+          const barW = 50, barH = 8;
+          ctx.fillStyle = 'hsl(0 70% 50%)';
+          ctx.fillRect(barX, barY, barW, barH);
+          ctx.fillStyle = 'hsl(145 70% 50%)';
+          ctx.fillRect(barX, barY, barW * longPct, barH);
+          ctx.font = '8px monospace';
+          ctx.fillStyle = 'hsl(222 10% 60%)';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${totalLong}L / ${totalShort}S`, barX + barW/2, barY + barH + 9);
+        }
       }
 
       // SL/TP lines
@@ -1695,7 +1724,7 @@
       return 10 * mag;
     }
 
-    // ─── Exchange price comparison ──────────────────────────────────
+    // ─── Exchange data (kept for basis tracking, panel removed) ────
     let basisHistory = [];
 
     function renderExchangePrices() {
