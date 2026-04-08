@@ -1529,63 +1529,77 @@
         ctx.fillText(priceLabel, W - margin.right + 5, nowY + 4);
       }
 
-      // Signal predictions: show consensus target as horizontal lines within visible range
+      // Signal gravity dots — each prediction as a circle at its target price
+      // Projected to the right of the last candle, like the old gravity chart
       if (visible.length > 0 && predictions.length > 0) {
-        // Filter to targets within the visible price range
-        let longTargets = [], shortTargets = [];
-        predictions.forEach(pred => {
-          const target = pred.target_price || pred.targetPrice;
-          const conf = pred.confidence || pred.cc || 0.5;
-          const dir = String(pred.direction || '').toLowerCase();
-          if (!target || pred.expired || target < minP || target > maxP) return;
-          if (dir === 'long') longTargets.push({ target, conf });
-          else if (dir === 'short') shortTargets.push({ target, conf });
+        const lastCandleX = margin.left + (visible.length - 1) * step + candleWidth / 2;
+        const projectionZone = W - margin.right - lastCandleX;  // Available space to the right
+
+        // Filter active predictions within a reasonable range of current price
+        const priceBand = (maxP - minP) * 1.5;  // Allow some overflow
+        const activePreds = predictions.filter(p => {
+          const target = p.target_price || p.targetPrice;
+          return target && !p.expired && Math.abs(target - nowPrice) < priceBand;
         });
 
-        // Long consensus target line (green, full width)
-        if (longTargets.length >= 3) {
-          const weightedSum = longTargets.reduce((s, p) => s + p.target * p.conf, 0);
-          const weightSum = longTargets.reduce((s, p) => s + p.conf, 0);
-          const avgTarget = weightedSum / weightSum;
-          const avgY = toY(avgTarget);
+        // Group by horizon for X-axis spacing
+        const hzOrder = { '1m': 0.15, '5m': 0.35, '15m': 0.6, '30m': 0.75, '1h': 0.9 };
 
-          ctx.strokeStyle = 'hsla(145, 70%, 50%, 0.4)';
-          ctx.lineWidth = 1;
-          ctx.setLineDash([2, 4]);
-          ctx.beginPath(); ctx.moveTo(margin.left, avgY); ctx.lineTo(W - margin.right, avgY); ctx.stroke();
-          ctx.setLineDash([]);
+        let longCount = 0, shortCount = 0;
 
-          ctx.font = '9px monospace';
-          ctx.fillStyle = 'hsla(145, 70%, 50%, 0.7)';
-          ctx.textAlign = 'right';
-          ctx.fillText(`▲${longTargets.length} → $${avgTarget.toFixed(1)}`, W - margin.right - 2, avgY - 3);
-        }
+        activePreds.forEach(pred => {
+          const target = pred.target_price || pred.targetPrice;
+          const conf = pred.confidence || pred.cc || 0.3;
+          const dir = String(pred.direction || '').toLowerCase();
+          const hz = pred.hz || pred.horizon || '5m';
 
-        // Short consensus target line (red, full width)
-        if (shortTargets.length >= 3) {
-          const weightedSum = shortTargets.reduce((s, p) => s + p.target * p.conf, 0);
-          const weightSum = shortTargets.reduce((s, p) => s + p.conf, 0);
-          const avgTarget = weightedSum / weightSum;
-          const avgY = toY(avgTarget);
+          // Position: X based on horizon, Y based on target price
+          const hzFrac = hzOrder[hz] || 0.5;
+          const dotX = lastCandleX + projectionZone * hzFrac + (Math.random() - 0.5) * 8;
+          const dotY = toY(target);
 
-          ctx.strokeStyle = 'hsla(0, 70%, 50%, 0.4)';
-          ctx.lineWidth = 1;
-          ctx.setLineDash([2, 4]);
-          ctx.beginPath(); ctx.moveTo(margin.left, avgY); ctx.lineTo(W - margin.right, avgY); ctx.stroke();
-          ctx.setLineDash([]);
+          // Skip if outside visible Y range
+          if (dotY < margin.top - 10 || dotY > H - margin.bottom + 10) return;
 
-          ctx.font = '9px monospace';
-          ctx.fillStyle = 'hsla(0, 70%, 50%, 0.7)';
-          ctx.textAlign = 'right';
-          ctx.fillText(`▼${shortTargets.length} → $${avgTarget.toFixed(1)}`, W - margin.right - 2, avgY + 10);
-        }
+          // Size proportional to confidence (min 2, max 6)
+          const radius = 2 + conf * 4;
+
+          // Color: green for long, red for short
+          // Alpha proportional to confidence
+          const alpha = 0.3 + conf * 0.5;
+
+          if (dir === 'long') {
+            ctx.fillStyle = `hsla(145, 70%, 50%, ${alpha})`;
+            longCount++;
+          } else if (dir === 'short') {
+            ctx.fillStyle = `hsla(0, 70%, 50%, ${alpha})`;
+            shortCount++;
+          } else {
+            ctx.fillStyle = `hsla(220, 50%, 60%, ${alpha * 0.5})`;
+          }
+
+          // Draw dot
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Thin line from current price to target (only for high-confidence signals)
+          if (conf > 0.4) {
+            ctx.strokeStyle = ctx.fillStyle;
+            ctx.lineWidth = 0.5;
+            ctx.globalAlpha = alpha * 0.4;
+            ctx.beginPath();
+            ctx.moveTo(lastCandleX, toY(nowPrice));
+            ctx.lineTo(dotX, dotY);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+        });
 
         // Consensus bar (top right)
-        const totalLong = longTargets.length;
-        const totalShort = shortTargets.length;
-        const total = totalLong + totalShort;
+        const total = longCount + shortCount;
         if (total > 0) {
-          const longPct = totalLong / total;
+          const longPct = longCount / total;
           const barX = W - margin.right - 55;
           const barY = margin.top + 5;
           const barW = 50, barH = 6;
@@ -1596,7 +1610,16 @@
           ctx.font = '8px monospace';
           ctx.fillStyle = 'hsl(222 10% 55%)';
           ctx.textAlign = 'center';
-          ctx.fillText(`${totalLong}L / ${totalShort}S`, barX + barW/2, barY + barH + 9);
+          ctx.fillText(`${longCount}L / ${shortCount}S`, barX + barW/2, barY + barH + 9);
+        }
+
+        // Horizon labels along the bottom of the projection zone
+        ctx.font = '8px monospace';
+        ctx.fillStyle = 'hsl(222 10% 35%)';
+        ctx.textAlign = 'center';
+        for (const [hz, frac] of Object.entries(hzOrder)) {
+          const x = lastCandleX + projectionZone * frac;
+          ctx.fillText(hz, x, H - margin.bottom + 14);
         }
       }
 
