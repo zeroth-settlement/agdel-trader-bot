@@ -890,6 +890,13 @@
     let lastWsPrice = 0;
     let wsPriceActive = false;
 
+    // Chart pan/zoom state
+    let chartZoom = 1.0;       // 1.0 = default, >1 = zoomed in, <1 = zoomed out
+    let chartPanOffset = 0;    // 0 = latest candles on right, positive = scrolled back in time
+    let chartDragging = false;
+    let chartDragStartX = 0;
+    let chartDragStartOffset = 0;
+
     // ─── Tab switching ──────────────────────────────────────────────
     function switchTab(tabId) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1057,15 +1064,32 @@
 
     // ─── KPIs ───────────────────────────────────────────────────────
     function renderKpis() {
-      const pnl = state.portfolio?.pnl || 0;
-      document.getElementById('kpiPnl').textContent = formatCurrency(pnl);
-      document.getElementById('kpiPnl').style.color = pnl >= 0 ? 'hsl(var(--py-success))' : 'hsl(var(--py-error))';
+      const perf = state.performance || {};
 
-      document.getElementById('kpiWinRate').textContent = state.performance?.winRate != null ? `${(state.performance.winRate * 100).toFixed(1)}%` : '--%';
-      document.getElementById('kpiTotalTrades').textContent = state.performance?.totalTrades || tradeHistory.length || 0;
-      document.getElementById('kpiFeeDrag').textContent = formatCurrency(state.performance?.totalFees || 0);
+      // 24h Net P&L (gross P&L minus fees)
+      const netPnl = perf.netPnl24h ?? perf.netPnl ?? 0;
+      const pnlEl = document.getElementById('kpiPnl');
+      pnlEl.textContent = formatCurrency(netPnl);
+      pnlEl.style.color = netPnl >= 0 ? 'hsl(var(--py-success))' : 'hsl(var(--py-error))';
+
+      // 24h Win Rate
+      const wr = perf.winRate24h ?? perf.winRate ?? 0;
+      document.getElementById('kpiWinRate').textContent = `${(wr * 100).toFixed(1)}%`;
+
+      // 24h Trade Count
+      document.getElementById('kpiTotalTrades').textContent = perf.tradeCount24h ?? perf.totalTrades ?? 0;
+
+      // 24h Fee Drag
+      const fees = perf.totalFees24h ?? perf.totalFees ?? 0;
+      const feesEl = document.getElementById('kpiFeeDrag');
+      feesEl.textContent = formatCurrency(fees);
+      feesEl.style.color = fees > 0 ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg))';
+
+      // Active CxUs
       document.getElementById('kpiCxuCount').textContent = Object.values(cxuStore).reduce((s, a) => s + a.length, 0);
-      document.getElementById('kpiTradesToday').textContent = state.performance?.tradesToday || 0;
+
+      // Trades Today
+      document.getElementById('kpiTradesToday').textContent = perf.tradesToday ?? 0;
     }
 
     // ─── Decision card ──────────────────────────────────────────────
@@ -1255,6 +1279,7 @@
     // ─── Timeframe switching ────────────────────────────────────────
     async function switchTimeframe(tf) {
       activeTimeframe = tf;
+      chartPanOffset = 0;  // Reset pan on timeframe change
       document.querySelectorAll('.tf-btn').forEach(b => {
         b.classList.toggle('active', b.textContent === tf);
       });
@@ -1310,15 +1335,20 @@
         return;
       }
 
-      // Show last N candles that fit the width
+      // Show candles with pan/zoom
       const margin = { top: 20, right: 75, bottom: 30, left: 10 };
       const plotW = W - margin.left - margin.right;
       const plotH = H - margin.top - margin.bottom;
-      const candleWidth = Math.max(3, Math.min(12, plotW / 120));
+      const baseCandleW = plotW / 120;
+      const candleWidth = Math.max(2, Math.min(20, baseCandleW * chartZoom));
       const gap = Math.max(1, candleWidth * 0.3);
       const step = candleWidth + gap;
       const maxCandles = Math.floor(plotW / step);
-      const visible = candles.slice(-maxCandles);
+
+      // Pan: offset from the end
+      const endIdx = Math.max(maxCandles, candles.length - chartPanOffset);
+      const startIdx = Math.max(0, endIdx - maxCandles);
+      const visible = candles.slice(startIdx, endIdx);
 
       // Price range from visible candles + predictions + position levels
       const predictions = state.predictions || [];
@@ -2642,6 +2672,50 @@
 
       // Load initial candle data for default timeframe
       await switchTimeframe(activeTimeframe);
+
+      // Chart pan/zoom event handlers
+      const priceCanvas = document.getElementById('priceCanvas');
+      if (priceCanvas) {
+        // Zoom with mouse wheel
+        priceCanvas.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const delta = e.deltaY > 0 ? -0.1 : 0.1;
+          chartZoom = Math.max(0.3, Math.min(5.0, chartZoom + delta));
+          renderCandlestickChart();
+        }, { passive: false });
+
+        // Pan with mouse drag
+        priceCanvas.addEventListener('mousedown', (e) => {
+          chartDragging = true;
+          chartDragStartX = e.clientX;
+          chartDragStartOffset = chartPanOffset;
+          priceCanvas.style.cursor = 'grabbing';
+        });
+        window.addEventListener('mousemove', (e) => {
+          if (!chartDragging) return;
+          const dx = e.clientX - chartDragStartX;
+          const baseCandleW = priceCanvas.getBoundingClientRect().width / 120;
+          const step = Math.max(2, baseCandleW * chartZoom) * 1.3;
+          const candlesDragged = Math.round(dx / step);
+          chartPanOffset = Math.max(0, chartDragStartOffset + candlesDragged);
+          renderCandlestickChart();
+        });
+        window.addEventListener('mouseup', () => {
+          if (chartDragging) {
+            chartDragging = false;
+            priceCanvas.style.cursor = 'crosshair';
+          }
+        });
+
+        // Double-click to reset
+        priceCanvas.addEventListener('dblclick', () => {
+          chartZoom = 1.0;
+          chartPanOffset = 0;
+          renderCandlestickChart();
+        });
+
+        priceCanvas.style.cursor = 'crosshair';
+      }
 
       // Connect WebSocket to trading server
       connectWs();
