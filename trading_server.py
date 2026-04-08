@@ -1236,6 +1236,115 @@ async def get_risk_levels():
     return risk_manager.get_sl_tp_levels()
 
 
+@app.get("/api/position")
+async def get_position_detail():
+    """Detailed position tracker with breakeven, fees, and signal context."""
+    if not hl_trader:
+        return JSONResponse({"error": "Not initialized"}, status_code=400)
+
+    pos = await hl_trader.get_position()
+    if not pos or pos.side == "FLAT":
+        return {"position": None, "status": "flat"}
+
+    mark_price = await hl_trader.get_mark_price()
+    portfolio = await hl_trader.get_portfolio() or {}
+
+    entry = pos.entry_price or 0
+    size = abs(pos.size) if hasattr(pos, 'size') else 0
+    notional = size * entry
+    side = pos.side.lower()
+
+    # Fee calculation from hyperliquid-fees CxU
+    fee_cxu = cxu_store.by_alias("hyperliquid-fees") if cxu_store else None
+    taker_fee_pct = 0.045  # default Tier 0
+    if fee_cxu:
+        taker_fee_pct = fee_cxu.param_value("takerFeePct", 0.045)
+
+    # Round-trip fees (entry taker + exit taker)
+    rt_fee_pct = taker_fee_pct * 2 / 100  # convert from basis points style
+    rt_fee_usd = notional * rt_fee_pct
+    fee_per_side_usd = notional * (taker_fee_pct / 100)
+
+    # Breakeven: entry adjusted by round-trip fee
+    if side == "long":
+        breakeven = entry * (1 + rt_fee_pct)
+        distance_to_breakeven = mark_price - breakeven
+        distance_pct = (mark_price - breakeven) / breakeven * 100
+    else:  # short
+        breakeven = entry * (1 - rt_fee_pct)
+        distance_to_breakeven = breakeven - mark_price
+        distance_pct = (breakeven - mark_price) / breakeven * 100
+
+    # P&L
+    if side == "long":
+        gross_pnl = (mark_price - entry) * size
+    else:
+        gross_pnl = (entry - mark_price) * size
+    net_pnl = gross_pnl - fee_per_side_usd  # already paid entry fee
+
+    # Leverage and liquidation
+    leverage = pos.leverage if hasattr(pos, 'leverage') else 1
+    margin = notional / leverage if leverage else notional
+    if side == "long":
+        liq_price = entry * (1 - 1 / leverage) if leverage > 1 else 0
+    else:
+        liq_price = entry * (1 + 1 / leverage) if leverage > 1 else float('inf')
+    distance_to_liq = abs(mark_price - liq_price)
+    distance_to_liq_pct = distance_to_liq / mark_price * 100
+
+    # Signal context
+    regime = latest_regime.get("data", {}).get("regime", "unknown")
+    consensus = latest_signal_assessment.get("data", {}).get("consensus", {})
+    decision = latest_decision.get("data", {})
+
+    # Risk levels
+    risk = risk_manager.get_sl_tp_levels() if risk_manager else {}
+
+    return {
+        "position": {
+            "side": side,
+            "size": size,
+            "entryPrice": entry,
+            "markPrice": mark_price,
+            "notional": round(notional, 2),
+            "leverage": leverage,
+            "margin": round(margin, 2),
+        },
+        "pnl": {
+            "grossPnl": round(gross_pnl, 2),
+            "entryFee": round(fee_per_side_usd, 2),
+            "exitFeeEstimate": round(fee_per_side_usd, 2),
+            "roundTripFee": round(rt_fee_usd, 2),
+            "netPnl": round(net_pnl, 2),
+            "unrealizedPnl": round(pos.unrealized_pnl if hasattr(pos, 'unrealized_pnl') else gross_pnl, 2),
+        },
+        "breakeven": {
+            "price": round(breakeven, 2),
+            "distanceUsd": round(distance_to_breakeven, 2),
+            "distancePct": round(distance_pct, 3),
+            "profitable": distance_to_breakeven > 0,
+        },
+        "liquidation": {
+            "price": round(liq_price, 2),
+            "distanceUsd": round(distance_to_liq, 2),
+            "distancePct": round(distance_to_liq_pct, 2),
+        },
+        "risk": risk,
+        "signals": {
+            "regime": regime,
+            "consensus": consensus.get("direction", "NEUTRAL"),
+            "consensusPct": consensus.get("agreementPct", 0),
+            "agentRecommendation": decision.get("action", "hold"),
+            "agentConfidence": decision.get("confidence", 0),
+        },
+        "fees": {
+            "takerFeePct": taker_fee_pct,
+            "feePerSideUsd": round(fee_per_side_usd, 2),
+            "roundTripPct": round(rt_fee_pct * 100, 4),
+        },
+    }
+
+
 @app.post("/api/close")
 async def close_position():
     if not hl_trader:
