@@ -676,21 +676,21 @@
     <div class="feed-panel" id="feed-direct">
       <div class="signal-section">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-3);">
-          <span class="py-text-bold">Signal Cluster Drift</span>
-          <span class="py-text-xs py-text-muted" id="directFeedTimestamp">--</span>
+          <span class="py-text-bold">Direct Signal Feed</span>
+          <span class="py-text-xs py-text-muted" id="directFeedCount">0 signals</span>
         </div>
-        <div id="clusterDriftView">
-          <div class="empty-state">
-            <div class="empty-state-icon">&#128225;</div>
-            <div>Connect to signal bot to see cluster drift analysis</div>
-            <div class="py-text-xs py-text-muted" style="margin-top:var(--py-space-2);">~500 signals per tick, aggregated by type and horizon</div>
-          </div>
-        </div>
-      </div>
-      <div class="signal-section">
-        <span class="py-text-bold">Signal Quality by Regime</span>
-        <div style="margin-top:var(--py-space-3);">
-          <canvas id="signalQualityChart" height="250"></canvas>
+        <!-- Signal summary by type -->
+        <div id="directSignalSummary" style="margin-bottom:var(--py-space-3);"></div>
+        <!-- Signal detail table -->
+        <div class="signal-table-wrap">
+          <table class="signal-table">
+            <thead><tr>
+              <th>Type</th><th>Hz</th><th>Dir</th><th>Conf</th><th>C*C</th><th>Entry</th><th>Target</th><th>Δ%</th>
+            </tr></thead>
+            <tbody id="directSignalBody">
+              <tr><td colspan="8" class="py-text-muted" style="text-align:center;">Waiting for signals...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1324,10 +1324,7 @@
       const predictions = state.predictions || [];
       let allPrices = [];
       visible.forEach(c => { allPrices.push(c.h, c.l); });
-      predictions.forEach(p => {
-        const tp = p.target_price || p.targetPrice;
-        if (tp && !p.expired) allPrices.push(tp);
-      });
+      // Don't include predictions in price range — they stretch the chart too much
       // Include position entry, SL, TP, ratchet so they're always visible on chart
       const _pos = state.position || state.hlPosition || {};
       if (_pos.entryPrice) allPrices.push(_pos.entryPrice);
@@ -1502,83 +1499,58 @@
         ctx.fillText(priceLabel, W - margin.right + 5, nowY + 4);
       }
 
-      // Signal predictions overlay
-      // Aggregate by direction: compute weighted average target for longs vs shorts
+      // Signal predictions: show consensus target as horizontal lines within visible range
       if (visible.length > 0 && predictions.length > 0) {
-        const lastCandleX = margin.left + (visible.length - 1) * step + candleWidth / 2;
-
-        // Separate by direction, filter active only
+        // Filter to targets within the visible price range
         let longTargets = [], shortTargets = [];
         predictions.forEach(pred => {
           const target = pred.target_price || pred.targetPrice;
           const conf = pred.confidence || pred.cc || 0.5;
-          const dir = (pred.direction || '').toLowerCase();
-          const expired = pred.expired;
-          if (!target || expired) return;
+          const dir = String(pred.direction || '').toLowerCase();
+          if (!target || pred.expired || target < minP || target > maxP) return;
           if (dir === 'long') longTargets.push({ target, conf });
           else if (dir === 'short') shortTargets.push({ target, conf });
         });
 
-        // Draw aggregated long signal band (green)
-        if (longTargets.length > 0) {
+        // Long consensus target line (green, full width)
+        if (longTargets.length >= 3) {
           const weightedSum = longTargets.reduce((s, p) => s + p.target * p.conf, 0);
           const weightSum = longTargets.reduce((s, p) => s + p.conf, 0);
           const avgTarget = weightedSum / weightSum;
-          const minTarget = Math.min(...longTargets.map(p => p.target));
-          const maxTarget = Math.max(...longTargets.map(p => p.target));
-
-          // Target zone (min to max)
-          ctx.globalAlpha = 0.08;
-          ctx.fillStyle = 'hsl(145 70% 50%)';
-          const zoneTop = toY(maxTarget);
-          const zoneBot = toY(minTarget);
-          ctx.fillRect(lastCandleX + 5, zoneTop, 60, zoneBot - zoneTop);
-          ctx.globalAlpha = 1;
-
-          // Weighted average line
-          ctx.strokeStyle = 'hsl(145 70% 50%)';
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([5, 3]);
           const avgY = toY(avgTarget);
-          ctx.beginPath(); ctx.moveTo(lastCandleX + 5, avgY); ctx.lineTo(lastCandleX + 65, avgY); ctx.stroke();
+
+          ctx.strokeStyle = 'hsla(145, 70%, 50%, 0.4)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath(); ctx.moveTo(margin.left, avgY); ctx.lineTo(W - margin.right, avgY); ctx.stroke();
           ctx.setLineDash([]);
 
-          // Label
           ctx.font = '9px monospace';
-          ctx.fillStyle = 'hsl(145 70% 50%)';
-          ctx.textAlign = 'left';
-          ctx.fillText(`▲ ${longTargets.length} long → $${avgTarget.toFixed(1)}`, lastCandleX + 5, avgY - 5);
+          ctx.fillStyle = 'hsla(145, 70%, 50%, 0.7)';
+          ctx.textAlign = 'right';
+          ctx.fillText(`▲${longTargets.length} → $${avgTarget.toFixed(1)}`, W - margin.right - 2, avgY - 3);
         }
 
-        // Draw aggregated short signal band (red)
-        if (shortTargets.length > 0) {
+        // Short consensus target line (red, full width)
+        if (shortTargets.length >= 3) {
           const weightedSum = shortTargets.reduce((s, p) => s + p.target * p.conf, 0);
           const weightSum = shortTargets.reduce((s, p) => s + p.conf, 0);
           const avgTarget = weightedSum / weightSum;
-          const minTarget = Math.min(...shortTargets.map(p => p.target));
-          const maxTarget = Math.max(...shortTargets.map(p => p.target));
-
-          ctx.globalAlpha = 0.08;
-          ctx.fillStyle = 'hsl(0 70% 50%)';
-          const zoneTop = toY(maxTarget);
-          const zoneBot = toY(minTarget);
-          ctx.fillRect(lastCandleX + 5, zoneTop, 60, zoneBot - zoneTop);
-          ctx.globalAlpha = 1;
-
-          ctx.strokeStyle = 'hsl(0 70% 50%)';
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([5, 3]);
           const avgY = toY(avgTarget);
-          ctx.beginPath(); ctx.moveTo(lastCandleX + 5, avgY); ctx.lineTo(lastCandleX + 65, avgY); ctx.stroke();
+
+          ctx.strokeStyle = 'hsla(0, 70%, 50%, 0.4)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath(); ctx.moveTo(margin.left, avgY); ctx.lineTo(W - margin.right, avgY); ctx.stroke();
           ctx.setLineDash([]);
 
           ctx.font = '9px monospace';
-          ctx.fillStyle = 'hsl(0 70% 50%)';
-          ctx.textAlign = 'left';
-          ctx.fillText(`▼ ${shortTargets.length} short → $${avgTarget.toFixed(1)}`, lastCandleX + 5, avgY + 12);
+          ctx.fillStyle = 'hsla(0, 70%, 50%, 0.7)';
+          ctx.textAlign = 'right';
+          ctx.fillText(`▼${shortTargets.length} → $${avgTarget.toFixed(1)}`, W - margin.right - 2, avgY + 10);
         }
 
-        // Signal consensus bar (bottom right of chart)
+        // Consensus bar (top right)
         const totalLong = longTargets.length;
         const totalShort = shortTargets.length;
         const total = totalLong + totalShort;
@@ -1586,13 +1558,13 @@
           const longPct = totalLong / total;
           const barX = W - margin.right - 55;
           const barY = margin.top + 5;
-          const barW = 50, barH = 8;
+          const barW = 50, barH = 6;
           ctx.fillStyle = 'hsl(0 70% 50%)';
           ctx.fillRect(barX, barY, barW, barH);
           ctx.fillStyle = 'hsl(145 70% 50%)';
           ctx.fillRect(barX, barY, barW * longPct, barH);
           ctx.font = '8px monospace';
-          ctx.fillStyle = 'hsl(222 10% 60%)';
+          ctx.fillStyle = 'hsl(222 10% 55%)';
           ctx.textAlign = 'center';
           ctx.fillText(`${totalLong}L / ${totalShort}S`, barX + barW/2, barY + barH + 9);
         }
@@ -2077,6 +2049,60 @@
       if (state.agdel?.autoBuy) {
         abBtn.textContent = 'Auto Buy: ON';
         abBtn.className = 'py-btn py-btn-xs py-btn-primary';
+      }
+
+      // Direct signal feed
+      const preds = state.predictions || [];
+      document.getElementById('directFeedCount').textContent = `${preds.length} signals`;
+
+      if (preds.length > 0) {
+        // Summary by signal type
+        const byType = {};
+        preds.forEach(p => {
+          const t = p.signal_type || p.signalType || '?';
+          if (!byType[t]) byType[t] = { long: 0, short: 0, neutral: 0, totalConf: 0, count: 0 };
+          const dir = String(p.direction || '').toLowerCase();
+          if (dir === 'long') byType[t].long++;
+          else if (dir === 'short') byType[t].short++;
+          else byType[t].neutral++;
+          byType[t].totalConf += (p.confidence || p.cc || 0);
+          byType[t].count++;
+        });
+
+        const summaryEl = document.getElementById('directSignalSummary');
+        summaryEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:var(--py-space-2);">${
+          Object.entries(byType).sort((a,b) => b[1].count - a[1].count).map(([type, d]) => {
+            const dominant = d.long > d.short ? 'LONG' : d.short > d.long ? 'SHORT' : 'FLAT';
+            const color = dominant === 'LONG' ? 'hsl(var(--py-success))' : dominant === 'SHORT' ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
+            const avgConf = (d.totalConf / d.count).toFixed(2);
+            return `<div style="background:hsl(var(--py-bg-subtle));border-radius:var(--py-radius-sm);padding:4px 8px;font-size:0.75rem;">
+              <span style="color:hsl(var(--py-fg-muted));">${type.replace('-signal','')}</span>
+              <span style="color:${color};font-weight:600;margin-left:4px;">${dominant}</span>
+              <span style="color:hsl(var(--py-fg-muted));margin-left:2px;">${d.long}L/${d.short}S</span>
+            </div>`;
+          }).join('')
+        }</div>`;
+
+        // Detail table (top 50 by confidence)
+        const sorted = [...preds].filter(p => !p.expired).sort((a,b) => (b.confidence || b.cc || 0) - (a.confidence || a.cc || 0));
+        const tbody = document.getElementById('directSignalBody');
+        tbody.innerHTML = sorted.slice(0, 50).map(p => {
+          const target = p.target_price || p.targetPrice || 0;
+          const entry = p.entry_price || p.entryPrice || 0;
+          const delta = entry > 0 ? ((target - entry) / entry * 100).toFixed(2) : '--';
+          const dir = String(p.direction || '').toLowerCase();
+          const dirColor = dir === 'long' ? 'hsl(var(--py-success))' : dir === 'short' ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
+          return `<tr>
+            <td>${(p.signal_type || p.signalType || '?').replace('-signal','')}</td>
+            <td>${p.hz || p.horizon || '--'}</td>
+            <td style="color:${dirColor};font-weight:600;">${dir.toUpperCase()}</td>
+            <td>${(p.confidence || 0).toFixed(2)}</td>
+            <td>${(p.cc || 0).toFixed(2)}</td>
+            <td>$${Number(entry).toFixed(1)}</td>
+            <td>$${Number(target).toFixed(1)}</td>
+            <td>${delta}%</td>
+          </tr>`;
+        }).join('');
       }
     }
 
