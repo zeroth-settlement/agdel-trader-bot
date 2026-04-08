@@ -992,10 +992,20 @@ def _get_active_playbook() -> str:
 
 def _compute_performance() -> Dict[str, Any]:
     if not trade_history:
-        return {"winRate": 0, "totalTrades": 0, "totalFees": 0, "tradesToday": 0}
-    wins = sum(1 for t in trade_history if (t.get("pnl") or 0) > 0)
-    total_fees = sum(t.get("fee", 0) for t in trade_history)
+        return {"winRate": 0, "totalTrades": 0, "totalFees": 0, "tradesToday": 0,
+                "netPnl": 0, "grossPnl": 0, "netPnl24h": 0, "grossPnl24h": 0,
+                "totalFees24h": 0, "winRate24h": 0, "tradeCount24h": 0}
+
     today = datetime.now(timezone.utc).date()
+    cutoff_24h = time.time() - 86400
+
+    # All-time stats
+    wins = sum(1 for t in trade_history if (t.get("pnl") or 0) > 0)
+    total_pnl = sum(t.get("pnl", 0) for t in trade_history)
+    total_fees = sum(t.get("fee", 0) for t in trade_history)
+
+    # 24h stats
+    trades_24h = []
     trades_today = 0
     for t in trade_history:
         try:
@@ -1004,13 +1014,28 @@ def _compute_performance() -> Dict[str, Any]:
                 dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                 if dt.date() == today:
                     trades_today += 1
+                if dt.timestamp() >= cutoff_24h:
+                    trades_24h.append(t)
         except Exception:
             pass
+
+    wins_24h = sum(1 for t in trades_24h if (t.get("pnl") or 0) > 0)
+    pnl_24h = sum(t.get("pnl", 0) for t in trades_24h)
+    fees_24h = sum(t.get("fee", 0) for t in trades_24h)
+
     return {
         "winRate": wins / len(trade_history) if trade_history else 0,
         "totalTrades": len(trade_history),
-        "totalFees": total_fees,
+        "totalFees": round(total_fees, 2),
+        "grossPnl": round(total_pnl, 2),
+        "netPnl": round(total_pnl - total_fees, 2),
         "tradesToday": trades_today,
+        # 24h window
+        "winRate24h": wins_24h / len(trades_24h) if trades_24h else 0,
+        "tradeCount24h": len(trades_24h),
+        "grossPnl24h": round(pnl_24h, 2),
+        "totalFees24h": round(fees_24h, 2),
+        "netPnl24h": round(pnl_24h - fees_24h, 2),
     }
 
 
@@ -1557,14 +1582,18 @@ async def get_candles(timeframe: str = "1m", limit: int = 300):
 
     local_candles = store.snapshot(limit)
 
-    # If we have enough local data, return it
-    if len(local_candles) >= limit * 0.8:
+    # If we have enough local data AND it's fresh, return it
+    secs = TIMEFRAMES.get(timeframe, 60)
+    is_fresh = False
+    if local_candles:
+        last_t = local_candles[-1].get("t", local_candles[-1].get("timestamp", 0))
+        is_fresh = (time.time() - last_t) < secs * 3  # Within 3 candle periods
+    if len(local_candles) >= limit * 0.8 and is_fresh:
         return {"timeframe": timeframe, "candles": local_candles, "source": "local"}
 
     # Fetch from Hyperliquid candle API to backfill
     try:
         hl_interval = timeframe  # HL uses same names: 1m, 3m, 5m, 15m, 1h
-        secs = TIMEFRAMES.get(timeframe, 60)
         start_ms = int((time.time() - secs * limit) * 1000)
         end_ms = int(time.time() * 1000)
 
