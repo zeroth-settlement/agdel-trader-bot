@@ -52,6 +52,7 @@ from agents.trainer import Trainer, TrainingInstruction
 from alerts import AlertManager
 from bounce_detector import BounceDetector
 from db import TraderDB
+from orderbook import OrderBookMonitor
 
 load_dotenv()
 
@@ -89,6 +90,7 @@ training_mode: bool = False
 alert_manager: AlertManager = AlertManager()
 bounce_detector: Optional[BounceDetector] = None
 trader_db: Optional[TraderDB] = None
+ob_monitor: OrderBookMonitor = OrderBookMonitor()
 agdel_buyer: Optional[AgdelBuyer] = None
 signal_feed: Optional[SignalFeed] = None
 
@@ -103,6 +105,10 @@ latest_regime: Dict[str, Any] = {}
 latest_signal_assessment: Dict[str, Any] = {}
 latest_decision: Dict[str, Any] = {}
 latest_reflection: Dict[str, Any] = {}
+
+# Cached position/portfolio (avoid double-fetching HL API per tick)
+cached_position: Dict[str, Any] = {}
+cached_portfolio: Dict[str, Any] = {}
 
 # Signal feed state
 direct_predictions: List[Dict] = []
@@ -278,7 +284,7 @@ async def lifespan(app: FastAPI):
     global hl_trader, risk_manager, bounce_trigger, ratchet_tp
     global sentiment_bias, cluster_tracker, exchange_feeds
     global cxu_store, regime_classifier, signal_assessor, trade_decider, reflector, trainer
-    global trade_history, agdel_buyer, signal_feed, bounce_detector, trader_db
+    global trade_history, agdel_buyer, signal_feed, bounce_detector, trader_db, ob_monitor
 
     logger.info("=" * 50)
     logger.info("  AgDel Trader Bot — Starting")
@@ -333,6 +339,27 @@ async def lifespan(app: FastAPI):
     reflector = Reflector(config, cxu_store)
     trainer = Trainer(config, cxu_store)
     bounce_detector = BounceDetector(cxu_store)
+
+    # Default alert watches — bounce setup zones
+    alert_manager.add_watch(
+        name="BB Lower Extreme",
+        description="Price near lower Bollinger Band — potential long bounce setup",
+        conditions={"bb_below": 15},
+        cooldown_seconds=600,
+    )
+    alert_manager.add_watch(
+        name="BB Upper Extreme",
+        description="Price near upper Bollinger Band — potential short bounce setup",
+        conditions={"bb_above": 85},
+        cooldown_seconds=600,
+    )
+    alert_manager.add_watch(
+        name="Regime Shift to Volatile",
+        description="Regime changed to volatile — increased risk, tighten stops",
+        conditions={"regime_is": "volatile"},
+        cooldown_seconds=1800,
+    )
+    logger.info("  Default alert watches: %d active", len(alert_manager.watches))
 
     # Initialize direct signal feed
     if config.get("signalFeed", {}).get("enabled", False):
@@ -402,6 +429,9 @@ async def lifespan(app: FastAPI):
         logger.warning("  AGDEL poll loop NOT started (buyer=%s, enabled=%s)",
                        agdel_buyer is not None, agdel_buyer.enabled if agdel_buyer else "N/A")
 
+    tasks.append(asyncio.create_task(orderbook_poll_loop()))
+    logger.info("  Order book monitor started")
+
     logger.info("  Background loops started")
     logger.info("=" * 50)
     logger.info("  Dashboard: http://localhost:9002/")
@@ -448,6 +478,7 @@ async def tick_loop():
 
 async def _run_tick():
     global last_decision_time, latest_regime, latest_signal_assessment, latest_decision
+    global cached_position, cached_portfolio
 
     if not hl_trader:
         return
@@ -461,6 +492,15 @@ async def _run_tick():
     # 2. Fetch position
     position = await hl_trader.get_position()
     pos_dict = position.to_dict() if hasattr(position, "to_dict") else (position or {})
+    cached_position = pos_dict
+    if pos_dict.get("side") and pos_dict["side"] not in ("flat", "FLAT"):
+        logger.info("Position: %s %.4f ETH @ $%.2f", pos_dict["side"], pos_dict.get("size", 0), pos_dict.get("entryPrice", 0))
+    # Cache portfolio too (separate call only when needed)
+    if hl_trader.mode == "live" and not cached_portfolio:
+        try:
+            cached_portfolio = await hl_trader.get_portfolio() or {}
+        except Exception:
+            pass
 
     # 3. Risk check
     if risk_manager and pos_dict.get("side") and pos_dict["side"] != "FLAT":
@@ -510,7 +550,52 @@ async def _run_tick():
                     risk_manager.clear_position()
             return
 
-    # 4. Rate limit — only run agent pipeline at decision interval
+    # 4. Bounce detection + alerts — EVERY TICK, not rate-limited
+    # Bounce detector (1m candles)
+    if bounce_detector and "1m" in candle_stores:
+        candles_1m_raw = candle_stores["1m"].snapshot(limit=10)
+        if len(candles_1m_raw) >= 5:
+            # Translate short keys (o/h/l/c) to full keys (open/high/low/close) for bounce detector
+            candles_1m = [{"open": c["o"], "high": c["h"], "low": c["l"], "close": c["c"], "timestamp": c["t"]} for c in candles_1m_raw]
+            signal = bounce_detector.check(candles_1m)
+            if signal:
+                alert_msg = {
+                    "type": "alert",
+                    "name": "Bounce Entry Detected",
+                    "description": (
+                        f"Drop {signal.drop_pct:.2f}% from ${signal.peak_price:.2f} to ${signal.bottom_price:.2f}, "
+                        f"momentum stalled. Entry: ${signal.entry_price:.2f}, "
+                        f"SL: ${signal.stop_loss:.2f}, TP: ${signal.take_profit:.2f}, "
+                        f"Size: {signal.size_pct}%"
+                    ),
+                    "price": mark_price,
+                    "signal": signal.to_dict(),
+                    "triggeredAt": time.time(),
+                }
+                for ws in ws_clients[:]:
+                    try:
+                        await ws.send_json(alert_msg)
+                    except Exception:
+                        pass
+                await alert_manager._send_notification(
+                    type("W", (), {"name": "Bounce Entry", "description": alert_msg["description"]})(),
+                    mark_price, latest_regime.get("data", {}).get("regime", "unknown"),
+                    latest_regime.get("data", {}).get("indicators", {}),
+                )
+
+    # Alert watches
+    if alert_manager.watches:
+        _regime = latest_regime.get("data", {}).get("regime", "unknown")
+        _indicators = latest_regime.get("data", {}).get("indicators", {})
+        triggered = await alert_manager.check_all(mark_price, _indicators, _regime, pos_dict)
+        for alert in triggered:
+            for ws in ws_clients[:]:
+                try:
+                    await ws.send_json({"type": "alert", **alert})
+                except Exception:
+                    pass
+
+    # 5. Rate limit — only run agent pipeline at decision interval
     min_interval = config.get("agentPipeline", {}).get("minDecisionIntervalMs", 120000) / 1000
     now = time.time()
     if now - last_decision_time < min_interval:
@@ -594,51 +679,7 @@ async def _run_tick():
             "citations": [],
         }
 
-    # 6. Bounce detector (1m candles)
-    if bounce_detector and "1m" in candle_stores:
-        candles_1m = candle_stores["1m"].snapshot(limit=10)
-        if len(candles_1m) >= 5:
-            signal = bounce_detector.check(candles_1m)
-            if signal:
-                alert_msg = {
-                    "type": "alert",
-                    "name": "Bounce Entry Detected",
-                    "description": (
-                        f"Drop {signal.drop_pct:.2f}% from ${signal.peak_price:.2f} to ${signal.bottom_price:.2f}, "
-                        f"momentum stalled. Entry: ${signal.entry_price:.2f}, "
-                        f"SL: ${signal.stop_loss:.2f}, TP: ${signal.take_profit:.2f}, "
-                        f"Size: {signal.size_pct}%"
-                    ),
-                    "price": mark_price,
-                    "signal": signal.to_dict(),
-                    "triggeredAt": time.time(),
-                }
-                # Send to dashboard via WebSocket
-                for ws in ws_clients[:]:
-                    try:
-                        await ws.send_json(alert_msg)
-                    except Exception:
-                        pass
-                # Send push notification
-                await alert_manager._send_notification(
-                    type("W", (), {"name": "Bounce Entry", "description": alert_msg["description"]})(),
-                    mark_price, regime, latest_regime.get("data", {}).get("indicators", {}),
-                )
-
-    # 7. Check alerts
-    if alert_manager.watches:
-        regime = latest_regime.get("data", {}).get("regime", "unknown")
-        indicators = latest_regime.get("data", {}).get("indicators", {})
-        triggered = await alert_manager.check_all(mark_price, indicators, regime, pos_dict)
-        for alert in triggered:
-            # Send alert to dashboard via WebSocket
-            for ws in ws_clients[:]:
-                try:
-                    await ws.send_json({"type": "alert", **alert})
-                except Exception:
-                    pass
-
-    # 7. Broadcast state
+    # 8. Broadcast state
     await _broadcast_state(mark_price, pos_dict)
 
 
@@ -779,6 +820,18 @@ async def reflection_loop():
             logger.error("Reflection error: %s", e, exc_info=True)
 
 
+# ─── Order Book Poll Loop ───────────────────────────────────────
+async def orderbook_poll_loop():
+    """Poll L2 order book every 5 seconds."""
+    await asyncio.sleep(3)  # Startup delay
+    while True:
+        try:
+            await ob_monitor.poll()
+        except Exception as e:
+            logger.error("Order book poll error: %s", e)
+        await asyncio.sleep(5)
+
+
 # ─── Signal Feed Loop ───────────────────────────────────────────
 async def signal_feed_loop():
     """Poll the direct signal bot for predictions."""
@@ -842,21 +895,17 @@ async def agdel_poll_loop():
 # ─── WebSocket ───────────────────────────────────────────────────
 async def _broadcast_state(mark_price: float, position: dict):
     """Build and broadcast state to all WebSocket clients."""
-    portfolio = {}
-    hl_position = {}
-    hl_portfolio = {}
+    # Use cached data from tick loop — no additional HL API calls
+    portfolio = cached_portfolio or {}
+    hl_position = position or cached_position or {}
+    hl_portfolio = cached_portfolio or {}
 
-    if hl_trader:
+    if hl_trader and hl_trader.mode == "paper" and not portfolio:
         try:
             portfolio = await hl_trader.get_portfolio() or {}
+            hl_portfolio = portfolio
         except Exception:
             pass
-        try:
-            hl_pos = await hl_trader.get_position()
-            hl_position = hl_pos.to_dict() if hl_pos else {}
-        except Exception:
-            pass
-        hl_portfolio = portfolio
 
     # Build state dict (compatible with dashboard expectations)
     state = {
@@ -902,6 +951,9 @@ async def _broadcast_state(mark_price: float, position: dict):
 
         # Training mode
         "trainingMode": training_mode,
+
+        # Order book
+        "orderbook": ob_monitor.latest.to_dict() if ob_monitor and ob_monitor.latest else None,
 
         # Performance (computed from trade history)
         "performance": _compute_performance(),
@@ -1268,6 +1320,14 @@ async def sync_risk_from_position():
         "markPrice": mark_price,
         "levels": levels,
     }
+
+
+@app.get("/api/orderbook")
+async def get_orderbook():
+    """Get latest order book analysis."""
+    if ob_monitor and ob_monitor.latest:
+        return ob_monitor.latest.to_dict()
+    return {"error": "No order book data yet"}
 
 
 @app.get("/api/db/stats")

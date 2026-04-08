@@ -1588,11 +1588,40 @@
         ctx.fillText(`TP $${Number(risk.tpPrice).toFixed(2)}`, W - margin.right - 4, tpY - 3);
       }
 
-      // Breakeven line (entry + round-trip taker fees)
+      // Position overlay — entry, breakeven, P&L, ratchet TP
       const pos = state.position || state.hlPosition || {};
       if (pos.entryPrice && pos.side && pos.side !== 'flat' && pos.side !== 'FLAT') {
-        const TAKER_FEE = 0.000432; // 0.0432% per side
+        const TAKER_FEE = 0.000432;
         const isLong = pos.side === 'long' || pos.side === 'LONG';
+        const posColor = isLong ? 'hsl(145 60% 50%)' : 'hsl(0 65% 55%)';
+        const posLabel = isLong ? 'LONG' : 'SHORT';
+
+        // Entry price line (solid, thin)
+        const entryY = toY(pos.entryPrice);
+        if (entryY > margin.top && entryY < H - margin.bottom) {
+          ctx.setLineDash([1, 3]);
+          ctx.strokeStyle = posColor;
+          ctx.lineWidth = 1;
+          ctx.globalAlpha = 0.5;
+          ctx.beginPath(); ctx.moveTo(margin.left, entryY); ctx.lineTo(W - margin.right, entryY); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+
+          // Entry label with side badge
+          ctx.font = '9px monospace';
+          ctx.textAlign = 'right';
+          const entryLabel = `${posLabel} $${pos.entryPrice.toFixed(2)}`;
+          const entryLabelW = ctx.measureText(entryLabel).width + 8;
+          ctx.fillStyle = posColor;
+          ctx.globalAlpha = 0.9;
+          ctx.fillRect(W - margin.right - entryLabelW - 2, entryY + 2, entryLabelW + 2, 13);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 9px monospace';
+          ctx.fillText(entryLabel, W - margin.right - 4, entryY + 12);
+        }
+
+        // Breakeven line
         const breakeven = isLong
           ? pos.entryPrice * (1 + 2 * TAKER_FEE)
           : pos.entryPrice * (1 - 2 * TAKER_FEE);
@@ -1606,7 +1635,42 @@
           ctx.fillStyle = 'hsl(45 80% 55%)';
           ctx.font = '9px monospace';
           ctx.textAlign = 'right';
-          ctx.fillText(`BE $${breakeven.toFixed(2)} (entry + RT fees)`, W - margin.right - 4, beY - 3);
+          ctx.fillText(`BE $${breakeven.toFixed(2)}`, W - margin.right - 4, beY - 3);
+        }
+
+        // Unrealized P&L on the current price line
+        if (nowPrice > 0 && pos.size) {
+          const pnl = isLong
+            ? (nowPrice - pos.entryPrice) * Math.abs(pos.size)
+            : (pos.entryPrice - nowPrice) * Math.abs(pos.size);
+          const pnlColor = pnl >= 0 ? 'hsl(145 60% 50%)' : 'hsl(0 65% 55%)';
+          const pnlText = `P&L: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+          ctx.fillStyle = pnlColor;
+          ctx.font = 'bold 10px monospace';
+          ctx.textAlign = 'left';
+          ctx.fillText(pnlText, margin.left + 6, margin.top + 14);
+          // Size
+          ctx.fillStyle = 'hsl(222 10% 50%)';
+          ctx.font = '9px monospace';
+          ctx.fillText(`${Math.abs(pos.size).toFixed(4)} ETH`, margin.left + 6, margin.top + 26);
+        }
+
+        // Ratchet TP level
+        const ratchet = state.ratchetTp || {};
+        if (ratchet.active && ratchet.tp_price > 0) {
+          const ratchetY = toY(ratchet.tp_price);
+          if (ratchetY > margin.top && ratchetY < H - margin.bottom) {
+            ctx.setLineDash([4, 2]);
+            ctx.strokeStyle = 'hsl(270 60% 60%)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(margin.left, ratchetY); ctx.lineTo(W - margin.right, ratchetY); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'hsl(270 60% 60%)';
+            ctx.font = '9px monospace';
+            ctx.textAlign = 'right';
+            const phaseLabel = ratchet.phase === 'protect' ? 'protect' : ratchet.phase === 'breakeven' ? 'BE lock' : 'ratchet';
+            ctx.fillText(`Ratchet TP $${ratchet.tp_price.toFixed(2)} [${phaseLabel}]`, W - margin.right - 4, ratchetY - 3);
+          }
         }
       }
 
@@ -1889,21 +1953,24 @@
 
         narrativeEl.innerHTML = `
           <div style="margin-top:var(--py-space-3);padding-top:var(--py-space-3);border-top:1px solid hsl(var(--py-border));">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--py-space-2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.ai-arrow').textContent=b.style.display==='none'?'▶':'▼';">
               <div style="display:flex;align-items:center;gap:var(--py-space-2);">
+                <span class="ai-arrow" style="font-size:1rem;color:hsl(var(--py-fg-muted));">▶</span>
                 <span class="py-text-xs py-text-bold" style="text-transform:uppercase;letter-spacing:0.05em;">AI Analysis</span>
                 <span class="macro-bias-badge ${scoreBadge}" style="font-size:0.7rem;">Score: ${llm.score}</span>
                 <span class="py-text-xs py-text-muted">${confPct}% confidence</span>
               </div>
-              <span class="py-text-xs py-text-muted">${llm.headlineCount || 0} headlines analyzed &middot; ${llm.timestamp ? timeAgo(llm.timestamp * 1000) : '--'}</span>
+              <span class="py-text-xs py-text-muted">${llm.headlineCount || 0} headlines &middot; ${llm.timestamp ? timeAgo(llm.timestamp * 1000) : '--'}</span>
             </div>
-            <div class="py-text-sm" style="line-height:1.6;margin-bottom:var(--py-space-2);">${escapeHtml(llm.narrative)}</div>
-            ${llm.holdingRec ? `<div style="background:hsl(var(--py-bg-subtle));border-radius:var(--py-radius-sm);padding:var(--py-space-2);margin-bottom:var(--py-space-2);font-size:0.85rem;"><strong>Holding:</strong> ${escapeHtml(llm.holdingRec)}</div>` : ''}
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--py-space-2);font-size:0.8rem;">
-              ${factors ? `<div><span class="py-text-xs py-text-bold py-text-muted">Key Factors</span><ul style="margin:4px 0 0 16px;padding:0;">${factors}</ul></div>` : ''}
-              ${risks ? `<div><span class="py-text-xs py-text-bold py-text-muted">Risks</span><ul style="margin:4px 0 0 16px;padding:0;">${risks}</ul></div>` : ''}
+            <div style="display:none;">
+              <div class="py-text-sm" style="line-height:1.6;margin:var(--py-space-2) 0;">${escapeHtml(llm.narrative)}</div>
+              ${llm.holdingRec ? `<div style="background:hsl(var(--py-bg-subtle));border-radius:var(--py-radius-sm);padding:var(--py-space-2);margin-bottom:var(--py-space-2);font-size:0.85rem;"><strong>Holding:</strong> ${escapeHtml(llm.holdingRec)}</div>` : ''}
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--py-space-2);font-size:0.8rem;">
+                ${factors ? `<div><span class="py-text-xs py-text-bold py-text-muted">Key Factors</span><ul style="margin:4px 0 0 16px;padding:0;">${factors}</ul></div>` : ''}
+                ${risks ? `<div><span class="py-text-xs py-text-bold py-text-muted">Risks</span><ul style="margin:4px 0 0 16px;padding:0;">${risks}</ul></div>` : ''}
+              </div>
+              ${llm.divergences ? `<div class="py-text-xs" style="margin-top:var(--py-space-2);color:hsl(var(--py-warning));"><strong>Divergence:</strong> ${escapeHtml(llm.divergences)}</div>` : ''}
             </div>
-            ${llm.divergences ? `<div class="py-text-xs" style="margin-top:var(--py-space-2);color:hsl(var(--py-warning));"><strong>Divergence:</strong> ${escapeHtml(llm.divergences)}</div>` : ''}
           </div>`;
       } else {
         narrativeEl.innerHTML = `
