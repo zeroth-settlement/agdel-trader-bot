@@ -50,6 +50,7 @@ from agents.trade_decider import TradeDecider
 from agents.reflector import Reflector
 from agents.trainer import Trainer, TrainingInstruction
 from alerts import AlertManager
+from bounce_detector import BounceDetector
 
 load_dotenv()
 
@@ -85,6 +86,7 @@ reflector: Optional[Reflector] = None
 trainer: Optional[Trainer] = None
 training_mode: bool = False
 alert_manager: AlertManager = AlertManager()
+bounce_detector: Optional[BounceDetector] = None
 agdel_buyer: Optional[AgdelBuyer] = None
 signal_feed: Optional[SignalFeed] = None
 
@@ -260,7 +262,7 @@ async def lifespan(app: FastAPI):
     global hl_trader, risk_manager, bounce_trigger, ratchet_tp
     global sentiment_bias, cluster_tracker, exchange_feeds
     global cxu_store, regime_classifier, signal_assessor, trade_decider, reflector, trainer
-    global trade_history, agdel_buyer, signal_feed
+    global trade_history, agdel_buyer, signal_feed, bounce_detector
 
     logger.info("=" * 50)
     logger.info("  AgDel Trader Bot — Starting")
@@ -295,6 +297,7 @@ async def lifespan(app: FastAPI):
     trade_decider = TradeDecider(config, cxu_store)
     reflector = Reflector(config, cxu_store)
     trainer = Trainer(config, cxu_store)
+    bounce_detector = BounceDetector(cxu_store)
 
     # Initialize direct signal feed
     if config.get("signalFeed", {}).get("enabled", False):
@@ -554,7 +557,38 @@ async def _run_tick():
             "citations": [],
         }
 
-    # 6. Check alerts
+    # 6. Bounce detector (1m candles)
+    if bounce_detector and "1m" in candle_stores:
+        candles_1m = candle_stores["1m"].snapshot(limit=10)
+        if len(candles_1m) >= 5:
+            signal = bounce_detector.check(candles_1m)
+            if signal:
+                alert_msg = {
+                    "type": "alert",
+                    "name": "Bounce Entry Detected",
+                    "description": (
+                        f"Drop {signal.drop_pct:.2f}% from ${signal.peak_price:.2f} to ${signal.bottom_price:.2f}, "
+                        f"momentum stalled. Entry: ${signal.entry_price:.2f}, "
+                        f"SL: ${signal.stop_loss:.2f}, TP: ${signal.take_profit:.2f}, "
+                        f"Size: {signal.size_pct}%"
+                    ),
+                    "price": mark_price,
+                    "signal": signal.to_dict(),
+                    "triggeredAt": time.time(),
+                }
+                # Send to dashboard via WebSocket
+                for ws in ws_clients[:]:
+                    try:
+                        await ws.send_json(alert_msg)
+                    except Exception:
+                        pass
+                # Send push notification
+                await alert_manager._send_notification(
+                    type("W", (), {"name": "Bounce Entry", "description": alert_msg["description"]})(),
+                    mark_price, regime, latest_regime.get("data", {}).get("indicators", {}),
+                )
+
+    # 7. Check alerts
     if alert_manager.watches:
         regime = latest_regime.get("data", {}).get("regime", "unknown")
         indicators = latest_regime.get("data", {}).get("indicators", {})
@@ -1124,6 +1158,82 @@ async def set_risk_targets(body: dict):
         "tpPrice": levels.get("tpPrice"),
         "message": f"SL=${levels.get('slPrice', 0):.2f} TP=${levels.get('tpPrice', 0):.2f}",
     }
+
+
+@app.post("/api/risk/sl")
+async def set_stop_loss(body: dict):
+    """Set stop loss. Body: {"price": 2100.00} or {"pct": 3.0}"""
+    if not risk_manager:
+        return JSONResponse({"error": "Risk manager not initialized"}, status_code=400)
+    sl_price = body.get("price")
+    sl_pct = body.get("pct")
+    if sl_price:
+        risk_manager.sl_fixed_price = float(sl_price)
+        risk_manager.sl_mode = "fixed"
+        return {"stopLoss": sl_price, "mode": "fixed"}
+    elif sl_pct:
+        risk_manager.sl_trailing_pct = float(sl_pct) / 100
+        risk_manager.sl_mode = "trailing"
+        return {"stopLoss": f"{sl_pct}%", "mode": "trailing"}
+    return JSONResponse({"error": "Provide 'price' or 'pct'"}, status_code=400)
+
+
+@app.post("/api/risk/tp")
+async def set_take_profit(body: dict):
+    """Set take profit. Body: {"price": 2200.00} or {"pct": 5.0}"""
+    if not risk_manager:
+        return JSONResponse({"error": "Risk manager not initialized"}, status_code=400)
+    tp_price = body.get("price")
+    tp_pct = body.get("pct")
+    if tp_price:
+        risk_manager.tp_fixed_price = float(tp_price)
+        return {"takeProfit": tp_price}
+    elif tp_pct:
+        risk_manager.tp_fixed_pct = float(tp_pct) / 100
+        return {"takeProfit": f"{tp_pct}%"}
+    return JSONResponse({"error": "Provide 'price' or 'pct'"}, status_code=400)
+
+
+@app.post("/api/risk/sync")
+async def sync_risk_from_position():
+    """Sync the risk manager with the current HL position.
+    Use this when you opened a position outside the bot.
+    """
+    if not risk_manager or not hl_trader:
+        return JSONResponse({"error": "Not initialized"}, status_code=400)
+
+    pos = await hl_trader.get_position()
+    if not pos or pos.side == "FLAT":
+        return JSONResponse({"error": "No open position to sync"}, status_code=400)
+
+    mark_price = await hl_trader.get_mark_price()
+    entry = pos.entry_price or mark_price
+
+    # Use recover_from_position if available, otherwise reset_watermark
+    if hasattr(risk_manager, 'recover_from_position'):
+        risk_manager.recover_from_position(entry, pos.side, mark_price)
+    else:
+        risk_manager.reset_watermark(entry, pos.side)
+        risk_manager.update_watermark(mark_price)
+
+    levels = risk_manager.get_sl_tp_levels()
+    logger.info("Risk synced: entry=$%.2f side=%s watermark=$%.2f levels=%s",
+                entry, pos.side, mark_price, levels)
+    return {
+        "synced": True,
+        "entry": entry,
+        "side": pos.side,
+        "markPrice": mark_price,
+        "levels": levels,
+    }
+
+
+@app.get("/api/risk/levels")
+async def get_risk_levels():
+    """Get current SL/TP levels."""
+    if not risk_manager:
+        return {}
+    return risk_manager.get_sl_tp_levels()
 
 
 @app.post("/api/close")
