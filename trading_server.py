@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -1548,12 +1549,76 @@ async def get_ticks():
 
 
 @app.get("/api/candles")
-async def get_candles(timeframe: str = "1m", limit: int = 200):
-    """Return OHLC candles for the given timeframe."""
+async def get_candles(timeframe: str = "1m", limit: int = 300):
+    """Return OHLC candles. Fetches from Hyperliquid API if local data is insufficient."""
     store = candle_stores.get(timeframe)
     if not store:
         return JSONResponse({"error": f"Invalid timeframe. Use: {list(TIMEFRAMES.keys())}"}, status_code=400)
-    return {"timeframe": timeframe, "candles": store.snapshot(limit)}
+
+    local_candles = store.snapshot(limit)
+
+    # If we have enough local data, return it
+    if len(local_candles) >= limit * 0.8:
+        return {"timeframe": timeframe, "candles": local_candles, "source": "local"}
+
+    # Fetch from Hyperliquid candle API to backfill
+    try:
+        hl_interval = timeframe  # HL uses same names: 1m, 3m, 5m, 15m, 1h
+        secs = TIMEFRAMES.get(timeframe, 60)
+        start_ms = int((time.time() - secs * limit) * 1000)
+        end_ms = int(time.time() * 1000)
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://api.hyperliquid.xyz/info",
+                json={
+                    "type": "candleSnapshot",
+                    "req": {
+                        "coin": "ETH",
+                        "interval": hl_interval,
+                        "startTime": start_ms,
+                        "endTime": end_ms,
+                    }
+                }
+            )
+            if resp.status_code == 200:
+                hl_candles = resp.json()
+                candles = []
+                for c in hl_candles:
+                    candles.append({
+                        "t": c["t"] / 1000,
+                        "o": float(c["o"]),
+                        "h": float(c["h"]),
+                        "l": float(c["l"]),
+                        "c": float(c["c"]),
+                        "v": float(c.get("v", 0)),
+                        "n": int(c.get("n", 0)),
+                    })
+
+                # Save to DB
+                if trader_db and candles:
+                    trader_db.save_candles_batch(timeframe, [
+                        {"timestamp": c["t"], "open": c["o"], "high": c["h"],
+                         "low": c["l"], "close": c["c"], "ticks": c.get("n", 0)}
+                        for c in candles
+                    ])
+
+                # Backfill in-memory store
+                for c in candles:
+                    if not any(abs(existing.timestamp - c["t"]) < 1 for existing in store.closed):
+                        store.closed.append(Candle(
+                            timestamp=c["t"], open=c["o"], high=c["h"],
+                            low=c["l"], close=c["c"], ticks=c.get("n", 0),
+                        ))
+                sorted_candles = sorted(store.closed, key=lambda x: x.timestamp)
+                store.closed.clear()
+                store.closed.extend(sorted_candles)
+
+                return {"timeframe": timeframe, "candles": candles[-limit:], "source": "hyperliquid", "count": len(candles)}
+    except Exception as e:
+        logger.warning("HL candle fetch failed: %s", e)
+
+    return {"timeframe": timeframe, "candles": local_candles, "source": "local"}
 
 
 @app.get("/api/macro")
