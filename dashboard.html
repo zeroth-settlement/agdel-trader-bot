@@ -1364,15 +1364,21 @@
       const predictions = state.predictions || [];
       let allPrices = [];
       visible.forEach(c => { allPrices.push(c.h, c.l); });
-      // Don't include predictions in price range — they stretch the chart too much
-      // Include position entry, SL, TP, ratchet so they're always visible on chart
-      const _pos = state.position || state.hlPosition || {};
-      if (_pos.entryPrice) allPrices.push(_pos.entryPrice);
-      const _risk = state.riskLevels || {};
-      if (_risk.slPrice) allPrices.push(_risk.slPrice);
-      if (_risk.tpPrice) allPrices.push(_risk.tpPrice);
-      const _ratchet = state.ratchetTp || {};
-      if (_ratchet.active && _ratchet.tp_price) allPrices.push(_ratchet.tp_price);
+      // Include position levels only if near candle range — prevents distant SL/TP from blowing out Y-axis
+      if (allPrices.length > 0) {
+        const _cMin = Math.min(...allPrices);
+        const _cMax = Math.max(...allPrices);
+        const _pad = (_cMax - _cMin) * 0.5 || 5; // 50% of candle range as tolerance
+        const _near = (p) => p >= _cMin - _pad && p <= _cMax + _pad;
+
+        const _pos = state.position || state.hlPosition || {};
+        if (_pos.entryPrice && _near(_pos.entryPrice)) allPrices.push(_pos.entryPrice);
+        const _risk = state.riskLevels || {};
+        if (_risk.slPrice && _near(_risk.slPrice)) allPrices.push(_risk.slPrice);
+        if (_risk.tpPrice && _near(_risk.tpPrice)) allPrices.push(_risk.tpPrice);
+        const _ratchet = state.ratchetTp || {};
+        if (_ratchet.active && _ratchet.tp_price && _near(_ratchet.tp_price)) allPrices.push(_ratchet.tp_price);
+      }
       if (allPrices.length === 0) return;
 
       const dataMin = Math.min(...allPrices);
