@@ -507,10 +507,11 @@
       </div>
     </div>
 
-    <!-- Macro Sentiment Panel -->
+    <!-- Macro Sentiment Panel (collapsible) -->
     <div class="macro-panel" id="macroPanel">
-      <div class="macro-header">
+      <div class="macro-header" style="cursor:pointer;" onclick="document.getElementById('macroBody').style.display = document.getElementById('macroBody').style.display === 'none' ? 'block' : 'none'; this.querySelector('.collapse-arrow').textContent = document.getElementById('macroBody').style.display === 'none' ? '▸' : '▾';">
         <div style="display:flex;align-items:center;gap:var(--py-space-3);">
+          <span class="collapse-arrow" style="font-size:0.7rem;color:hsl(var(--py-fg-muted));">▾</span>
           <span class="py-text-sm py-text-bold">Macro Sentiment</span>
           <span class="macro-bias-badge macro-neutral" id="macroBias">LOADING</span>
           <span class="py-text-xs py-text-muted" id="macroHoldingAdj"></span>
@@ -520,6 +521,7 @@
           <button class="py-btn py-btn-xs py-btn-ghost" onclick="refreshMacro()">Refresh</button>
         </div>
       </div>
+      <div id="macroBody">
       <!-- Gauge: bearish ← → bullish -->
       <div class="macro-gauge" id="macroGauge">
         <div class="macro-gauge-fill" id="macroGaugeFill" style="width:50%;background:hsl(var(--py-fg-muted));"></div>
@@ -532,6 +534,7 @@
       <div class="macro-indicators" id="macroIndicators" style="margin-top:var(--py-space-2);">
         <div class="macro-indicator"><span class="macro-indicator-label">Loading...</span></div>
       </div>
+      </div><!-- /macroBody -->
     </div>
 
     <!-- Exchange Price Comparison -->
@@ -619,6 +622,30 @@
       <div class="decision-citations" id="decisionCitations" style="display:none;">
         <span class="py-text-xs py-text-muted">CxU Citations:</span>
         <div id="decisionCxuPills" style="margin-top:var(--py-space-1);display:flex;flex-wrap:wrap;gap:var(--py-space-1);"></div>
+      </div>
+    </div>
+
+    <!-- Position Tracker (detailed) -->
+    <div class="py-card" id="positionTracker" style="margin-bottom:var(--py-space-4);display:none;">
+      <div class="py-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="py-text-sm py-text-bold">Position Tracker</span>
+        <span class="py-text-xs py-text-muted" id="posTrackerSide">--</span>
+      </div>
+      <div class="py-card-content">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--py-space-3);font-family:var(--py-font-mono);font-size:0.85rem;">
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Entry</span><span id="ptEntry">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Mark</span><span id="ptMark">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Breakeven</span><span id="ptBreakeven">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Distance</span><span id="ptDistance">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Gross P&L</span><span id="ptGrossPnl">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">RT Fees</span><span id="ptFees">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Net P&L</span><span id="ptNetPnl">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Liq. Price</span><span id="ptLiqPrice">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Size</span><span id="ptSize">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Notional</span><span id="ptNotional">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Leverage</span><span id="ptLeverage">--</span></div>
+          <div><span class="py-text-xs py-text-muted" style="display:block;">Liq. Buffer</span><span id="ptLiqBuffer">--</span></div>
+        </div>
       </div>
     </div>
 
@@ -1115,6 +1142,54 @@
     }
 
     // ─── Position cards ─────────────────────────────────────────────
+    // Poll position tracker
+    async function pollPositionTracker() {
+      try {
+        const resp = await fetch(`${CONFIG.tradingServerUrl}/api/position`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const tracker = document.getElementById('positionTracker');
+        if (!data.position || data.status === 'flat') {
+          tracker.style.display = 'none';
+          return;
+        }
+        tracker.style.display = 'block';
+        const p = data.position;
+        const pnl = data.pnl;
+        const be = data.breakeven;
+        const liq = data.liquidation;
+
+        document.getElementById('ptEntry').textContent = `$${p.entryPrice.toFixed(2)}`;
+        document.getElementById('ptMark').textContent = `$${p.markPrice.toFixed(2)}`;
+        document.getElementById('ptBreakeven').textContent = `$${be.price.toFixed(2)}`;
+        const distEl = document.getElementById('ptDistance');
+        distEl.textContent = `${be.distancePct >= 0 ? '+' : ''}${be.distancePct.toFixed(2)}%`;
+        distEl.style.color = be.profitable ? 'hsl(var(--py-success))' : 'hsl(var(--py-error))';
+
+        const grossEl = document.getElementById('ptGrossPnl');
+        grossEl.textContent = `$${pnl.grossPnl.toFixed(2)}`;
+        grossEl.style.color = pnl.grossPnl >= 0 ? 'hsl(var(--py-success))' : 'hsl(var(--py-error))';
+
+        document.getElementById('ptFees').textContent = `$${pnl.roundTripFee.toFixed(2)}`;
+
+        const netEl = document.getElementById('ptNetPnl');
+        netEl.textContent = `$${pnl.netPnl.toFixed(2)}`;
+        netEl.style.color = pnl.netPnl >= 0 ? 'hsl(var(--py-success))' : 'hsl(var(--py-error))';
+
+        document.getElementById('ptLiqPrice').textContent = `$${liq.price.toFixed(2)}`;
+        document.getElementById('ptSize').textContent = `${p.size.toFixed(4)} ETH`;
+        document.getElementById('ptNotional').textContent = `$${p.notional.toLocaleString()}`;
+        document.getElementById('ptLeverage').textContent = `${p.leverage}x`;
+
+        const bufEl = document.getElementById('ptLiqBuffer');
+        bufEl.textContent = `${liq.distancePct.toFixed(1)}%`;
+        bufEl.style.color = liq.distancePct < 5 ? 'hsl(var(--py-error))' : liq.distancePct < 10 ? 'hsl(var(--py-warning))' : 'hsl(var(--py-fg))';
+
+        document.getElementById('ptTrackerSide').textContent = `${p.side.toUpperCase()} ${p.leverage}x`;
+        document.getElementById('ptTrackerSide').style.color = p.side === 'long' ? 'hsl(var(--py-success))' : 'hsl(var(--py-error))';
+      } catch (e) { /* position tracker not available */ }
+    }
+
     function renderPositionCards() {
       // Risk levels
       const risk = state.riskLevels || {};
@@ -2449,6 +2524,9 @@
       // Polling
       setInterval(loadTradeHistory, 10000);
       setInterval(loadReflectionHistory, 30000);
+      // Position tracker — poll every 5 seconds
+      pollPositionTracker();
+      setInterval(pollPositionTracker, 5000);
       // Macro sentiment — initial load + refresh every 5 min
       refreshMacro();
       setInterval(refreshMacro, 300000);
