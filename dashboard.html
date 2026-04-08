@@ -1300,13 +1300,20 @@
       const ctx = canvas.getContext('2d');
       const rect = canvas.parentElement.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      const W = Math.floor(rect.width);
+      const W = rect.width;
       const H = 400;
-      canvas.width = W * dpr;
-      canvas.height = H * dpr;
-      canvas.style.width = W + 'px';
-      canvas.style.height = H + 'px';
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Reset canvas dimensions to match display size × pixel ratio
+      if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+      }
+      // Reset transform completely before drawing
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      // Clear
+      ctx.clearRect(0, 0, W, H);
 
       // Background
       ctx.fillStyle = 'hsl(222 47% 6%)';
