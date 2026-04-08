@@ -558,6 +558,39 @@
       <canvas class="chart-canvas" id="priceCanvas"></canvas>
     </div>
 
+    <!-- Order Book Panel -->
+    <div class="py-card" style="margin-bottom:var(--py-space-4);" id="orderbookPanel">
+      <div class="py-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="py-text-sm py-text-bold">Order Book</span>
+        <div style="display:flex;align-items:center;gap:var(--py-space-3);">
+          <span id="obPressure" class="py-text-xs py-text-bold" style="padding:2px 8px;border-radius:var(--py-radius-full);">--</span>
+          <span id="obImbalance" class="py-text-xs py-text-muted">--</span>
+        </div>
+      </div>
+      <div class="py-card-content">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:var(--py-space-3);font-size:0.8rem;font-family:var(--py-font-mono);">
+          <div>
+            <div class="py-text-xs py-text-muted" style="margin-bottom:4px;">Support (Bids)</div>
+            <div id="obBids" style="color:hsl(var(--py-success));">--</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;">
+            <div style="width:100%;height:8px;background:hsl(var(--py-border));border-radius:4px;overflow:hidden;">
+              <div id="obGaugeFill" style="height:100%;width:50%;background:hsl(var(--py-success));border-radius:4px;transition:width 0.3s;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;width:100%;margin-top:2px;">
+              <span class="py-text-xs" style="color:hsl(var(--py-error));">Sell</span>
+              <span class="py-text-xs" id="obTrend" style="color:hsl(var(--py-fg-muted));">--</span>
+              <span class="py-text-xs" style="color:hsl(var(--py-success));">Buy</span>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div class="py-text-xs py-text-muted" style="margin-bottom:4px;">Resistance (Asks)</div>
+            <div id="obAsks" style="color:hsl(var(--py-error));">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 4. Latest Decision -->
     <div class="decision-card">
       <div class="decision-header">
@@ -995,6 +1028,7 @@
         renderPositionCards,
         renderCandlestickChart,
         renderSignals,
+        renderOrderBook,
         renderMacroSentiment,
       ];
       for (const fn of fns) {
@@ -1559,81 +1593,114 @@
         ctx.fillText('NOW', divX, margin.top - 5);
       }
 
-      // Signal gravity dots — each prediction as a circle at its target price
-      // Projected to the right of the last candle, like the old gravity chart
+      // Signal projection zone — mirrors signal bot dashboard style
+      // Each signal plotted at (X=horizon, Y=target price) with lines from NOW
       if (visible.length > 0 && predictions.length > 0) {
         const lastCandleX = margin.left + (visible.length - 1) * step + candleWidth / 2;
-        const projectionZone = plotW * 0.25;  // Right 25% reserved for signal projection
-        const projectionStart = margin.left + candleZoneW;
+        const projectionZone = W - margin.right - lastCandleX - 5; // All space after last candle
+        const projectionStart = lastCandleX + 10;
 
-        // Filter active predictions within a reasonable range of current price
-        const priceBand = (maxP - minP) * 1.5;  // Allow some overflow
+        // Horizon X positions (proportional to time)
+        const hzOrder = { '1m': 0.05, '5m': 0.15, '15m': 0.4, '30m': 0.6, '1h': 0.85 };
+
+        // Filter: has target, not expired
         const activePreds = predictions.filter(p => {
           const target = p.target_price || p.targetPrice;
-          return target && !p.expired && Math.abs(target - nowPrice) < priceBand;
+          return target && target > 0 && !p.expired;
         });
-
-        // Group by horizon for X-axis spacing
-        const hzOrder = { '1m': 0.15, '5m': 0.35, '15m': 0.6, '30m': 0.75, '1h': 0.9 };
 
         let longCount = 0, shortCount = 0;
 
+        // Draw connecting lines first (behind dots)
+        ctx.globalAlpha = 0.15;
+        ctx.lineWidth = 0.5;
         activePreds.forEach(pred => {
           const target = pred.target_price || pred.targetPrice;
+          const hz = pred.hz || pred.horizon || '5m';
+          const dir = String(pred.direction || '').toLowerCase();
+          const hzFrac = hzOrder[hz] || 0.5;
+          const dotX = projectionStart + projectionZone * hzFrac;
+          const dotY = toY(target);
+          if (dotY < margin.top - 20 || dotY > H - margin.bottom + 20) return;
+
+          ctx.strokeStyle = dir === 'long' ? 'hsl(145 70% 50%)' : dir === 'short' ? 'hsl(0 70% 50%)' : 'hsl(220 50% 50%)';
+          ctx.beginPath();
+          ctx.moveTo(lastCandleX, toY(nowPrice));
+          ctx.lineTo(dotX, dotY);
+          ctx.stroke();
+        });
+        ctx.globalAlpha = 1;
+
+        // Use a seeded hash for stable jitter (no random jumping)
+        const hashJitter = (str, i) => ((str.charCodeAt(0) || 0) * 7 + i * 13) % 20 - 10;
+
+        // Draw dots with horizon labels
+        activePreds.forEach((pred, idx) => {
+          const target = pred.target_price || pred.targetPrice;
+          if (!target || target <= 0) return;
           const conf = pred.confidence || pred.cc || 0.3;
           const dir = String(pred.direction || '').toLowerCase();
           const hz = pred.hz || pred.horizon || '5m';
+          const sigType = pred.signal_type || pred.signalType || '';
 
-          // Position: X based on horizon, Y based on target price
           const hzFrac = hzOrder[hz] || 0.5;
-          const dotX = projectionStart + projectionZone * hzFrac + (Math.random() - 0.5) * 8;
-          const dotY = toY(target);
+          const jitterX = hashJitter(sigType, idx);
+          const jitterY = hashJitter(hz, idx * 3);
+          const dotX = projectionStart + projectionZone * hzFrac + jitterX;
+          const dotY = toY(target) + jitterY * 0.3;
 
-          // Skip if outside visible Y range
-          if (dotY < margin.top - 10 || dotY > H - margin.bottom + 10) return;
+          if (dotY < margin.top - 20 || dotY > H - margin.bottom + 20) return;
 
-          // Size proportional to confidence (min 2, max 6)
-          const radius = 2 + conf * 4;
+          const alpha = 0.4 + conf * 0.5;
+          const isLong = dir === 'long';
+          const isShort = dir === 'short';
+          if (isLong) longCount++;
+          else if (isShort) shortCount++;
 
-          // Color: green for long, red for short
-          // Alpha proportional to confidence
-          const alpha = 0.3 + conf * 0.5;
+          // Shape: triangle for long (▲), inverted triangle for short (▼), diamond for flat
+          const sz = 4 + conf * 3;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = isLong ? 'hsl(145 70% 50%)' : isShort ? 'hsl(0 65% 55%)' : 'hsl(45 70% 55%)';
 
-          if (dir === 'long') {
-            ctx.fillStyle = `hsla(145, 70%, 50%, ${alpha})`;
-            longCount++;
-          } else if (dir === 'short') {
-            ctx.fillStyle = `hsla(0, 70%, 50%, ${alpha})`;
-            shortCount++;
-          } else {
-            ctx.fillStyle = `hsla(220, 50%, 60%, ${alpha * 0.5})`;
-          }
-
-          // Draw dot
           ctx.beginPath();
-          ctx.arc(dotX, dotY, radius, 0, Math.PI * 2);
+          if (isLong) {
+            // Triangle pointing up
+            ctx.moveTo(dotX, dotY - sz);
+            ctx.lineTo(dotX - sz * 0.7, dotY + sz * 0.5);
+            ctx.lineTo(dotX + sz * 0.7, dotY + sz * 0.5);
+          } else if (isShort) {
+            // Triangle pointing down
+            ctx.moveTo(dotX, dotY + sz);
+            ctx.lineTo(dotX - sz * 0.7, dotY - sz * 0.5);
+            ctx.lineTo(dotX + sz * 0.7, dotY - sz * 0.5);
+          } else {
+            // Diamond
+            ctx.moveTo(dotX, dotY - sz);
+            ctx.lineTo(dotX + sz * 0.6, dotY);
+            ctx.lineTo(dotX, dotY + sz);
+            ctx.lineTo(dotX - sz * 0.6, dotY);
+          }
+          ctx.closePath();
           ctx.fill();
 
-          // Thin line from current price to target (only for high-confidence signals)
-          if (conf > 0.4) {
-            ctx.strokeStyle = ctx.fillStyle;
-            ctx.lineWidth = 0.5;
-            ctx.globalAlpha = alpha * 0.4;
-            ctx.beginPath();
-            ctx.moveTo(lastCandleX, toY(nowPrice));
-            ctx.lineTo(dotX, dotY);
-            ctx.stroke();
-            ctx.globalAlpha = 1;
+          // Horizon label on high-confidence signals
+          if (conf > 0.35) {
+            ctx.globalAlpha = alpha * 0.8;
+            ctx.fillStyle = ctx.fillStyle;
+            ctx.font = 'bold 7px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(hz, dotX, dotY - sz - 2);
           }
+          ctx.globalAlpha = 1;
         });
 
-        // Consensus bar (top right)
+        // Consensus bar (top right of projection zone)
         const total = longCount + shortCount;
         if (total > 0) {
           const longPct = longCount / total;
-          const barX = W - margin.right - 55;
+          const barX = projectionStart + projectionZone * 0.3;
           const barY = margin.top + 5;
-          const barW = 50, barH = 6;
+          const barW = projectionZone * 0.4, barH = 5;
           ctx.fillStyle = 'hsl(0 70% 50%)';
           ctx.fillRect(barX, barY, barW, barH);
           ctx.fillStyle = 'hsl(145 70% 50%)';
@@ -1644,7 +1711,7 @@
           ctx.fillText(`${longCount}L / ${shortCount}S`, barX + barW/2, barY + barH + 9);
         }
 
-        // Horizon labels along the bottom of the projection zone
+        // Horizon axis labels along bottom of projection zone
         ctx.font = '8px monospace';
         ctx.fillStyle = 'hsl(222 10% 35%)';
         ctx.textAlign = 'center';
@@ -2085,6 +2152,56 @@
     }
 
     // ─── Signals ────────────────────────────────────────────────────
+    // ─── Order book panel ────────────────────────────────────────
+    function renderOrderBook() {
+      const ob = state.orderbook;
+      if (!ob) return;
+
+      // Pressure badge
+      const pressureEl = document.getElementById('obPressure');
+      const pressure = ob.pressure || 'NEUTRAL';
+      pressureEl.textContent = pressure;
+      pressureEl.style.background = pressure === 'BUY' ? 'hsl(var(--py-success) / 0.2)' : pressure === 'SELL' ? 'hsl(var(--py-error) / 0.2)' : 'hsl(var(--py-fg-muted) / 0.2)';
+      pressureEl.style.color = pressure === 'BUY' ? 'hsl(var(--py-success))' : pressure === 'SELL' ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
+
+      // Imbalance
+      document.getElementById('obImbalance').textContent = `${ob.imbalanceRatio?.toFixed(2) || '--'}x`;
+
+      // Gauge: 0=all sell, 0.5=balanced, 1=all buy
+      const ratio = ob.imbalanceRatio || 1;
+      const gaugePct = Math.min(100, Math.max(0, (ratio / (ratio + 1)) * 100));
+      document.getElementById('obGaugeFill').style.width = gaugePct + '%';
+      document.getElementById('obGaugeFill').style.background = gaugePct > 55 ? 'hsl(var(--py-success))' : gaugePct < 45 ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
+
+      // Bid walls
+      const bidsEl = document.getElementById('obBids');
+      const bidWalls = ob.bidWalls || [];
+      if (bidWalls.length > 0) {
+        bidsEl.innerHTML = bidWalls.map(w =>
+          `<div>\$${w.price.toFixed(1)} <span style="color:hsl(var(--py-fg-muted));">—</span> ${w.size.toLocaleString()} <span class="py-text-xs py-text-muted">(${w.multiple}x)</span></div>`
+        ).join('');
+      } else {
+        bidsEl.innerHTML = '<span class="py-text-muted">No walls</span>';
+      }
+
+      // Ask walls
+      const asksEl = document.getElementById('obAsks');
+      const askWalls = ob.askWalls || [];
+      if (askWalls.length > 0) {
+        asksEl.innerHTML = askWalls.map(w =>
+          `<div>${w.size.toLocaleString()} <span class="py-text-xs py-text-muted">(${w.multiple}x)</span> <span style="color:hsl(var(--py-fg-muted));">—</span> \$${w.price.toFixed(1)}</div>`
+        ).join('');
+      } else {
+        asksEl.innerHTML = '<span class="py-text-muted">No walls</span>';
+      }
+
+      // Trend (from periodic fetch)
+      const trendEl = document.getElementById('obTrend');
+      if (ob._trend) {
+        trendEl.textContent = ob._trend;
+      }
+    }
+
     function renderSignals() {
       // Purchased
       const purchases = state.purchases || [];
@@ -2785,6 +2902,21 @@
       // Position tracker — poll every 5 seconds
       pollPositionTracker();
       setInterval(pollPositionTracker, 5000);
+      // Order book trends — poll every 15s
+      setInterval(async () => {
+        try {
+          const resp = await fetch(`${CONFIG.tradingServerUrl}/api/orderbook/trends`);
+          if (resp.ok) {
+            const trends = await resp.json();
+            if (state.orderbook && trends.imbalance) {
+              state.orderbook._trend = trends.imbalance.shift;
+              document.getElementById('obTrend').textContent = trends.imbalance.shift;
+              const trendEl = document.getElementById('obTrend');
+              trendEl.style.color = trends.imbalance.shift === 'BUILDING_BUY' ? 'hsl(var(--py-success))' : trends.imbalance.shift === 'BUILDING_SELL' ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
+            }
+          }
+        } catch (e) {}
+      }, 15000);
       // Macro sentiment — initial load + refresh every 5 min
       refreshMacro();
       setInterval(refreshMacro, 300000);
