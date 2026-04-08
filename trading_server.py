@@ -51,6 +51,7 @@ from agents.reflector import Reflector
 from agents.trainer import Trainer, TrainingInstruction
 from alerts import AlertManager
 from bounce_detector import BounceDetector
+from db import TraderDB
 
 load_dotenv()
 
@@ -87,6 +88,7 @@ trainer: Optional[Trainer] = None
 training_mode: bool = False
 alert_manager: AlertManager = AlertManager()
 bounce_detector: Optional[BounceDetector] = None
+trader_db: Optional[TraderDB] = None
 agdel_buyer: Optional[AgdelBuyer] = None
 signal_feed: Optional[SignalFeed] = None
 
@@ -213,6 +215,20 @@ async def _on_price_tick(price: float):
         closed = store.update(price, ts)
         if closed:
             closed_candles[tf] = closed.to_dict()
+            # Persist to SQLite
+            if trader_db:
+                try:
+                    cd = closed_candles[tf]
+                    trader_db.save_candle(tf, {
+                        "timestamp": cd.get("t", cd.get("timestamp", 0)),
+                        "open": cd.get("o", cd.get("open", 0)),
+                        "high": cd.get("h", cd.get("high", 0)),
+                        "low": cd.get("l", cd.get("low", 0)),
+                        "close": cd.get("c", cd.get("close", 0)),
+                        "ticks": cd.get("ticks", 0),
+                    })
+                except Exception:
+                    pass
 
     # Throttle WS broadcasts to dashboard (max ~4/sec to avoid flooding)
     if ts - _last_ws_broadcast < 0.25:
@@ -262,7 +278,7 @@ async def lifespan(app: FastAPI):
     global hl_trader, risk_manager, bounce_trigger, ratchet_tp
     global sentiment_bias, cluster_tracker, exchange_feeds
     global cxu_store, regime_classifier, signal_assessor, trade_decider, reflector, trainer
-    global trade_history, agdel_buyer, signal_feed, bounce_detector
+    global trade_history, agdel_buyer, signal_feed, bounce_detector, trader_db
 
     logger.info("=" * 50)
     logger.info("  AgDel Trader Bot — Starting")
@@ -270,6 +286,25 @@ async def lifespan(app: FastAPI):
 
     # Load config
     load_config()
+
+    # Initialize SQLite DB
+    trader_db = TraderDB()
+    trader_db.connect()
+    db_stats = trader_db.get_stats()
+    logger.info("  SQLite DB: candles=%s, trades=%d, signals=%d, alerts=%d",
+                db_stats["candles"], db_stats["trades"], db_stats["signals"], db_stats["alerts"])
+
+    # Load candle history from DB into candle stores
+    for tf in candle_stores:
+        saved = trader_db.get_candles(tf, limit=500)
+        if saved:
+            store = candle_stores[tf]
+            for c in saved:
+                store.closed.append(Candle(
+                    timestamp=c["timestamp"], open=c["open"], high=c["high"],
+                    low=c["low"], close=c["close"], ticks=c.get("ticks", 0),
+                ))
+            logger.info("  Restored %d %s candles from DB", len(saved), tf)
 
     # Load trade history
     trade_history = list(load_jsonl(TRADE_HISTORY_PATH, maxlen=200))
@@ -384,6 +419,8 @@ async def lifespan(app: FastAPI):
             await agdel_buyer.stop()
         except Exception:
             pass
+    if trader_db:
+        trader_db.close()
     logger.info("Trading server stopped")
 
 
@@ -619,6 +656,11 @@ def _record_trade(result, rationale: str, mark_price: float, regime: str = "", c
 
     append_jsonl(TRADE_HISTORY_PATH, trade)
     append_jsonl(TRADE_LOG_PATH, {**trade, "markPrice": mark_price})
+    if trader_db:
+        try:
+            trader_db.save_trade({**trade, "price": mark_price, "mode": hl_trader.mode if hl_trader else "paper"})
+        except Exception:
+            pass
     logger.info("TRADE: %s | %s | regime=%s | citations=%d",
                 trade.get("action"), rationale[:60], regime, len(citations or []))
 
@@ -1226,6 +1268,13 @@ async def sync_risk_from_position():
         "markPrice": mark_price,
         "levels": levels,
     }
+
+
+@app.get("/api/db/stats")
+async def get_db_stats():
+    if not trader_db:
+        return {}
+    return trader_db.get_stats()
 
 
 @app.get("/api/risk/levels")

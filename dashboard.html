@@ -509,9 +509,9 @@
 
     <!-- Macro Sentiment Panel (collapsible) -->
     <div class="macro-panel" id="macroPanel">
-      <div class="macro-header" style="cursor:pointer;" onclick="document.getElementById('macroBody').style.display = document.getElementById('macroBody').style.display === 'none' ? 'block' : 'none'; this.querySelector('.collapse-arrow').textContent = document.getElementById('macroBody').style.display === 'none' ? '▸' : '▾';">
+      <div class="macro-header" style="cursor:pointer;" onclick="var b=document.getElementById('macroBody');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.collapse-arrow').textContent=b.style.display==='none'?'▶':'▼';">
         <div style="display:flex;align-items:center;gap:var(--py-space-3);">
-          <span class="collapse-arrow" style="font-size:0.7rem;color:hsl(var(--py-fg-muted));">▾</span>
+          <span class="collapse-arrow" style="font-size:1rem;color:hsl(var(--py-fg-muted));">▼</span>
           <span class="py-text-sm py-text-bold">Macro Sentiment</span>
           <span class="macro-bias-badge macro-neutral" id="macroBias">LOADING</span>
           <span class="py-text-xs py-text-muted" id="macroHoldingAdj"></span>
@@ -521,7 +521,7 @@
           <button class="py-btn py-btn-xs py-btn-ghost" onclick="refreshMacro()">Refresh</button>
         </div>
       </div>
-      <div id="macroBody">
+      <div id="macroBody" style="display:none;">
       <!-- Gauge: bearish ← → bullish -->
       <div class="macro-gauge" id="macroGauge">
         <div class="macro-gauge-fill" id="macroGaugeFill" style="width:50%;background:hsl(var(--py-fg-muted));"></div>
