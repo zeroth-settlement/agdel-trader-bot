@@ -1356,6 +1356,14 @@ async def get_orderbook():
     return {"error": "No order book data yet"}
 
 
+@app.get("/api/orderbook/trends")
+async def get_orderbook_trends():
+    """Get wall persistence and imbalance trends over last ~1 minute."""
+    if ob_monitor:
+        return ob_monitor.get_wall_trends()
+    return {"status": "not_initialized"}
+
+
 @app.get("/api/db/stats")
 async def get_db_stats():
     if not trader_db:

@@ -85,6 +85,9 @@ class OrderBookMonitor:
         self._http = httpx.AsyncClient(timeout=10)
         self._latest: Optional[OrderBookSnapshot] = None
         self._poll_count = 0
+        # Wall tracking history (last 60 snapshots = ~5 min at 5s poll)
+        self._history: List[OrderBookSnapshot] = []
+        self._max_history = 60
 
     @property
     def latest(self) -> Optional[OrderBookSnapshot]:
@@ -103,6 +106,9 @@ class OrderBookMonitor:
 
             snapshot = self._analyze(data)
             self._latest = snapshot
+            self._history.append(snapshot)
+            if len(self._history) > self._max_history:
+                self._history.pop(0)
             return snapshot
 
         except Exception as e:
@@ -201,6 +207,82 @@ class OrderBookMonitor:
             ask_depth_10bps=ask_depth_10bps,
             thin_zones=thin_zones,
         )
+
+    def get_wall_trends(self, lookback: int = 12) -> Dict[str, Any]:
+        """Analyze how walls and imbalance have changed over the last N snapshots (~1 min at 5s poll).
+
+        Returns trend data for monitoring wall stability.
+        """
+        if len(self._history) < 3:
+            return {"status": "insufficient_data", "snapshots": len(self._history)}
+
+        recent = self._history[-lookback:]
+
+        # Imbalance trend
+        imbalances = [s.imbalance_ratio for s in recent]
+        avg_imbalance = sum(imbalances) / len(imbalances)
+        imbalance_trend = imbalances[-1] - imbalances[0]  # positive = shifting to buy
+        pressure_shift = "BUILDING_BUY" if imbalance_trend > 0.3 else "BUILDING_SELL" if imbalance_trend < -0.3 else "STABLE"
+
+        # Total size trends
+        bid_sizes = [s.total_bid_size for s in recent]
+        ask_sizes = [s.total_ask_size for s in recent]
+        bid_trend = bid_sizes[-1] - bid_sizes[0]
+        ask_trend = ask_sizes[-1] - ask_sizes[0]
+
+        # Wall persistence: track which price levels had walls across snapshots
+        bid_wall_prices = {}
+        ask_wall_prices = {}
+        for s in recent:
+            for w in s.bid_walls:
+                key = round(w.price, 1)
+                if key not in bid_wall_prices:
+                    bid_wall_prices[key] = {"count": 0, "max_size": 0, "last_size": 0}
+                bid_wall_prices[key]["count"] += 1
+                bid_wall_prices[key]["max_size"] = max(bid_wall_prices[key]["max_size"], w.size)
+                bid_wall_prices[key]["last_size"] = w.size
+            for w in s.ask_walls:
+                key = round(w.price, 1)
+                if key not in ask_wall_prices:
+                    ask_wall_prices[key] = {"count": 0, "max_size": 0, "last_size": 0}
+                ask_wall_prices[key]["count"] += 1
+                ask_wall_prices[key]["max_size"] = max(ask_wall_prices[key]["max_size"], w.size)
+                ask_wall_prices[key]["last_size"] = w.size
+
+        # Persistent walls = appeared in >50% of snapshots
+        persistent_bids = [
+            {"price": p, "persistence": d["count"] / len(recent), "maxSize": round(d["max_size"], 1), "currentSize": round(d["last_size"], 1)}
+            for p, d in sorted(bid_wall_prices.items(), key=lambda x: -x[1]["count"])
+            if d["count"] >= len(recent) * 0.4
+        ]
+        persistent_asks = [
+            {"price": p, "persistence": d["count"] / len(recent), "maxSize": round(d["max_size"], 1), "currentSize": round(d["last_size"], 1)}
+            for p, d in sorted(ask_wall_prices.items(), key=lambda x: -x[1]["count"])
+            if d["count"] >= len(recent) * 0.4
+        ]
+
+        # Spoofed walls = appeared briefly then disappeared
+        spoofed = []
+        for walls, side in [(bid_wall_prices, "bid"), (ask_wall_prices, "ask")]:
+            for p, d in walls.items():
+                if d["max_size"] > 500 and d["count"] <= 2 and d["last_size"] == 0:
+                    spoofed.append({"price": p, "side": side, "peakSize": round(d["max_size"], 1)})
+
+        return {
+            "status": "ok",
+            "snapshots": len(recent),
+            "imbalance": {
+                "current": round(imbalances[-1], 2),
+                "average": round(avg_imbalance, 2),
+                "trend": round(imbalance_trend, 3),
+                "shift": pressure_shift,
+            },
+            "bidTrend": round(bid_trend, 0),
+            "askTrend": round(ask_trend, 0),
+            "persistentBidWalls": persistent_bids[:3],
+            "persistentAskWalls": persistent_asks[:3],
+            "spoofedWalls": spoofed,
+        }
 
     def _empty_snapshot(self) -> OrderBookSnapshot:
         return OrderBookSnapshot(
