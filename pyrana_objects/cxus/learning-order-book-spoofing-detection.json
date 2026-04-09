@@ -1,0 +1,45 @@
+{
+  "alias": "learning-order-book-spoofing-detection",
+  "cxu_id": "1220bff46bd9c662526ff8ba73bd494ed98ed59b6879dba5d3e39ba11de0a682402a",
+  "cxu_object": {
+    "claim": "Large ask or bid walls that shrink gradually over multiple minutes are potential spoofs designed to bait directional positions before a reversal. The critical tell is order book imbalance: if imbalance remains on the opposite side (SELL during ask wall shrinkage) while the wall disappears, the wall is likely being pulled rather than consumed by real orders. A brief imbalance flip in the wall's direction occurring simultaneously with wall disappearance signals the dump or pump beginning, not genuine directional flow. Real absorption of a wall by opposing orders would flip imbalance well before the wall is fully consumed.",
+    "supporting_contexts": [
+      {
+        "text": "Human observation at 2026-04-09T13:34:05.268335+00:00: A 5,200 ETH ask wall at $2177.50 appeared to be getting eaten over 4 minutes (shrinking from 5,263 to 2,705 to 0), which looked bullish. But the wall was a spoof \u2014 the whale gradually pulled orders to create the illusion of buying pressure, then once longs were trapped near $2177, pulled the wall and dumped price $4.30 in one candle. Large persistent walls that shrink gradually may be traps designed to bait positions before a reversal. The key tell was that imbalance stayed SELL (0.36-0.50) even while the wall was shrinking \u2014 real buying would have flipped imbalance to BUY much earlier. The brief BUY flip to 1.72 happened right as the wall disappeared, which was the dump starting, not genuine buying.. Market context: trending_down regime, $2173.25, BB=100%, trend=-0.2200%, position=long.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:playbook",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-09T13:34:05.268455+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:playbook",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

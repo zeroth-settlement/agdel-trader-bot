@@ -284,6 +284,74 @@ class OrderBookMonitor:
             "spoofedWalls": spoofed,
         }
 
+    def detect_accumulation_markup(self, lookback: int = 30) -> Dict[str, Any]:
+        """Detect accumulation→markup transition.
+
+        Accumulation: large ask walls appearing and being pulled (suppressing price)
+        Markup: ask walls stop, bid walls appear (supporting price)
+
+        The transition is the trading signal.
+        """
+        if len(self._history) < 10:
+            return {"phase": "unknown", "confidence": 0}
+
+        recent = self._history[-lookback:]
+        half = len(recent) // 2
+        first_half = recent[:half]
+        second_half = recent[half:]
+
+        # Count wall appearances per side in each half
+        def count_walls(snapshots):
+            ask_walls = sum(len(s.ask_walls) for s in snapshots)
+            bid_walls = sum(len(s.bid_walls) for s in snapshots)
+            ask_size = sum(sum(w.size for w in s.ask_walls) for s in snapshots)
+            bid_size = sum(sum(w.size for w in s.bid_walls) for s in snapshots)
+            avg_imbalance = sum(s.imbalance_ratio for s in snapshots) / len(snapshots) if snapshots else 1
+            return {"ask_walls": ask_walls, "bid_walls": bid_walls,
+                    "ask_size": ask_size, "bid_size": bid_size,
+                    "avg_imbalance": avg_imbalance}
+
+        first = count_walls(first_half)
+        second = count_walls(second_half)
+
+        # Accumulation: lots of ask walls in first half, fewer in second
+        # Markup: bid walls appearing in second half, imbalance shifting to BUY
+        ask_wall_declining = first["ask_walls"] > 0 and second["ask_walls"] < first["ask_walls"] * 0.5
+        bid_wall_emerging = second["bid_walls"] > first["bid_walls"]
+        imbalance_shifting_buy = second["avg_imbalance"] > first["avg_imbalance"] + 0.3
+
+        if ask_wall_declining and bid_wall_emerging and imbalance_shifting_buy:
+            return {
+                "phase": "MARKUP_STARTING",
+                "confidence": 0.8,
+                "signal": "Ask walls disappearing, bid walls emerging, imbalance shifting to BUY — markup phase likely starting",
+                "first_half": first,
+                "second_half": second,
+            }
+        elif ask_wall_declining and imbalance_shifting_buy:
+            return {
+                "phase": "ACCUMULATION_ENDING",
+                "confidence": 0.6,
+                "signal": "Ask walls declining and imbalance shifting to BUY — accumulation may be ending",
+                "first_half": first,
+                "second_half": second,
+            }
+        elif first["ask_size"] > first["bid_size"] * 2:
+            return {
+                "phase": "ACCUMULATION",
+                "confidence": 0.5,
+                "signal": "Heavy ask walls with suppressed price — possible accumulation in progress",
+                "first_half": first,
+                "second_half": second,
+            }
+        else:
+            return {
+                "phase": "NEUTRAL",
+                "confidence": 0.3,
+                "first_half": first,
+                "second_half": second,
+            }
+
     def _empty_snapshot(self) -> OrderBookSnapshot:
         return OrderBookSnapshot(
             timestamp=time.time(), mark_price=0, bid_ask_spread=0,

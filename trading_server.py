@@ -1364,6 +1364,14 @@ async def get_orderbook_trends():
     return {"status": "not_initialized"}
 
 
+@app.get("/api/orderbook/accumulation")
+async def get_accumulation_phase():
+    """Detect accumulation→markup transition pattern."""
+    if ob_monitor:
+        return ob_monitor.detect_accumulation_markup()
+    return {"phase": "unknown"}
+
+
 @app.get("/api/db/stats")
 async def get_db_stats():
     if not trader_db:
