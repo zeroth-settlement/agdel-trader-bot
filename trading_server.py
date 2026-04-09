@@ -1379,6 +1379,43 @@ async def get_risk_levels():
     return risk_manager.get_sl_tp_levels()
 
 
+@app.get("/api/position/hl")
+async def get_hl_position():
+    """Always fetch real Hyperliquid position regardless of paper/live mode."""
+    if not hl_trader or not hl_trader._main_address:
+        return {"position": None, "status": "no_wallet"}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post("https://api.hyperliquid.xyz/info", json={
+                "type": "clearinghouseState",
+                "user": hl_trader._main_address,
+            })
+            resp.raise_for_status()
+            state = resp.json()
+            for pos_data in state.get("assetPositions", []):
+                p = pos_data.get("position", {})
+                if p.get("coin") == "ETH":
+                    size = float(p.get("szi", 0))
+                    return {
+                        "position": {
+                            "side": "long" if size > 0 else "short" if size < 0 else "flat",
+                            "size": abs(size),
+                            "entryPrice": float(p.get("entryPx", 0)),
+                            "unrealizedPnl": float(p.get("unrealizedPnl", 0)),
+                            "leverage": int(float(p.get("leverage", {}).get("value", 1)) if isinstance(p.get("leverage"), dict) else float(p.get("leverage", 1))),
+                            "liquidationPrice": float(p.get("liquidationPx", 0) or 0),
+                        },
+                        "account": {
+                            "equity": float(state.get("marginSummary", {}).get("accountValue", 0)),
+                            "available": float(state.get("withdrawable", 0)),
+                        },
+                        "mode": hl_trader.mode,
+                    }
+            return {"position": None, "status": "flat"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.get("/api/position")
 async def get_position_detail():
     """Detailed position tracker with breakeven, fees, and signal context."""
@@ -1387,6 +1424,11 @@ async def get_position_detail():
 
     pos = await hl_trader.get_position()
     if not pos or pos.side == "FLAT":
+        # In paper mode, also check for real HL position
+        if hl_trader.mode == "paper":
+            hl_data = await get_hl_position()
+            if hl_data.get("position"):
+                return {**hl_data, "source": "hyperliquid", "note": "Real HL position (bot is in paper mode)"}
         return {"position": None, "status": "flat"}
 
     mark_price = await hl_trader.get_mark_price()
