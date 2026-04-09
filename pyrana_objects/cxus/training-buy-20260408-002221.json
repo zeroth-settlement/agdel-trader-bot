@@ -1,0 +1,45 @@
+{
+  "alias": "training-buy-20260408-002221",
+  "cxu_id": "1220b360ae999d46b3f7a4b3768cad5f43c40f917b78c9d8c2609c2a42885c1d4645",
+  "cxu_object": {
+    "claim": "Human trader executed buy at $2,240.55 in ranging regime. Reasoning: lets take on a long position to hold for the next few hours",
+    "supporting_contexts": [
+      {
+        "text": "Manual buy at 2026-04-08T00:22:21.331860+00:00. Price: $2,240.55, regime: ranging, BB: 50%, trend: 0.0000%, signal consensus: 0% NEUTRAL. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-08T00:22:21.332532+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

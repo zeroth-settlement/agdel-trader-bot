@@ -1,0 +1,45 @@
+{
+  "alias": "training-buy-20260408-133729",
+  "cxu_id": "122030c6a4c028830404e207aa9ba595a6d6282cc5a731d9b779258e26ab129751b2",
+  "cxu_object": {
+    "claim": "Human trader executed buy at $2,244.95 in trending_down regime. Reasoning: this is a longer slide.  lets double down.",
+    "supporting_contexts": [
+      {
+        "text": "Manual buy at 2026-04-08T13:37:29.265124+00:00. Price: $2,244.95, regime: trending_down, BB: 8%, trend: -0.5935%, signal consensus: 0% NEUTRAL. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-08T13:37:29.265223+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

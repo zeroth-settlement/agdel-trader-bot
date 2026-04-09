@@ -157,8 +157,13 @@ class HLTrader:
         backoff = 1.0
         while True:
             try:
-                async with websockets.connect(HL_WS_URL, ping_interval=20, ping_timeout=10) as ws:
-                    # Subscribe to allMids
+                # Timeout the connect itself to prevent hanging
+                ws = await asyncio.wait_for(
+                    websockets.connect(HL_WS_URL, ping_interval=20, ping_timeout=10,
+                                       close_timeout=5, open_timeout=10),
+                    timeout=15,
+                )
+                try:
                     await ws.send(json.dumps({
                         "method": "subscribe",
                         "subscription": {"type": "allMids"},
@@ -167,7 +172,16 @@ class HLTrader:
                     backoff = 1.0
                     logger.info("Hyperliquid WS connected — streaming allMids")
 
-                    async for raw in ws:
+                    # Read with per-message timeout to detect stale connections
+                    msg_count = 0
+                    while True:
+                        try:
+                            raw = await asyncio.wait_for(ws.recv(), timeout=30)
+                        except asyncio.TimeoutError:
+                            logger.warning("Hyperliquid WS stale (no data 30s, %d msgs received) — reconnecting", msg_count)
+                            break
+
+                        msg_count += 1
                         try:
                             msg = json.loads(raw)
                             data = msg.get("data", {})
@@ -180,11 +194,20 @@ class HLTrader:
                                     try:
                                         result = self._price_callback(price)
                                         if asyncio.iscoroutine(result):
-                                            await result
+                                            # Fire-and-forget with error logging
+                                            async def _safe_cb(coro):
+                                                try:
+                                                    await coro
+                                                except Exception as e:
+                                                    logger.warning("Price callback error: %s", e)
+                                            asyncio.create_task(_safe_cb(result))
                                     except Exception as cb_err:
-                                        logger.debug("Price callback error: %s", cb_err)
+                                        logger.warning("Price callback sync error: %s", cb_err)
                         except (json.JSONDecodeError, ValueError):
                             pass
+                finally:
+                    self._ws_connected = False
+                    await ws.close()
 
             except asyncio.CancelledError:
                 logger.info("Hyperliquid WS feed cancelled")
@@ -200,15 +223,17 @@ class HLTrader:
         return self._ws_connected
 
     async def get_hl_account(self) -> tuple[Position | None, dict]:
-        """Always fetch position + portfolio from Hyperliquid API (single call)."""
+        """Always fetch position + portfolio from Hyperliquid API (single call).
+        Uses a fresh HTTP client to avoid shared-state concurrency issues."""
         empty_portfolio = {"equity": 0, "availableBalance": 0, "pnl": 0, "paper": False}
         if not self._main_address:
             return None, empty_portfolio
         try:
-            resp = await self._http.post("/info", json={
-                "type": "clearinghouseState",
-                "user": self._main_address,
-            })
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(f"{HL_API_URL}/info", json={
+                    "type": "clearinghouseState",
+                    "user": self._main_address,
+                })
             resp.raise_for_status()
             state = resp.json()
 

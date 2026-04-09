@@ -188,10 +188,12 @@ class ExchangeFeeds:
 
         while True:
             try:
-                async with websockets.connect(
-                    cfg["ws_url"], ping_interval=20, ping_timeout=10
-                ) as ws:
-                    # Send subscription if needed
+                ws = await asyncio.wait_for(
+                    websockets.connect(cfg["ws_url"], ping_interval=20, ping_timeout=10,
+                                       close_timeout=5, open_timeout=10),
+                    timeout=15,
+                )
+                try:
                     if cfg["type"] == "subscribe" and "subscribe_msg" in cfg:
                         await ws.send(json.dumps(cfg["subscribe_msg"]))
 
@@ -199,7 +201,13 @@ class ExchangeFeeds:
                     backoff = 1.0
                     logger.info("%s WebSocket connected", cfg["name"])
 
-                    async for raw in ws:
+                    while True:
+                        try:
+                            raw = await asyncio.wait_for(ws.recv(), timeout=30)
+                        except asyncio.TimeoutError:
+                            logger.warning("%s WS stale — reconnecting", cfg["name"])
+                            break
+
                         try:
                             msg = json.loads(raw)
                             bid, ask = parser(msg)
@@ -210,12 +218,14 @@ class ExchangeFeeds:
                                 ep.last_update = time.time()
                                 ep.update_count += 1
 
-                                # Recompute delta
                                 if self._hl_mid > 0:
                                     ep.delta_vs_hl = ep.mid - self._hl_mid
                                     ep.delta_vs_hl_pct = (ep.delta_vs_hl / self._hl_mid) * 100
                         except (json.JSONDecodeError, ValueError, KeyError):
                             pass
+                finally:
+                    ep.connected = False
+                    await ws.close()
 
             except asyncio.CancelledError:
                 ep.connected = False

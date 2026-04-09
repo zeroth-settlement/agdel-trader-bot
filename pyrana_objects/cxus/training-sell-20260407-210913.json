@@ -1,0 +1,45 @@
+{
+  "alias": "training-sell-20260407-210913",
+  "cxu_id": "122012d8dda8228f377af4d6bb0ba7ca6707f5aeea6113a82597e3376f8f6e351efa",
+  "cxu_object": {
+    "claim": "Human trader executed sell at $2,138.15 in volatile regime. Reasoning: after the spike will equalize - going short.",
+    "supporting_contexts": [
+      {
+        "text": "Manual sell at 2026-04-07T21:09:13.229058+00:00. Price: $2,138.15, regime: volatile, BB: 98%, trend: 1.1052%, signal consensus: 100% SHORT. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-07T21:09:13.229154+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

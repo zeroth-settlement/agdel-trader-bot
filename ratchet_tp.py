@@ -31,12 +31,17 @@ class RatchetTP:
         self.fee_buffer: float = 2.0  # $ buffer above breakeven for fees
         self._activated_at: float = 0
 
-    def activate(self, side: str, entry_price: float, fee_estimate: float = 1.0):
-        """Start ratcheting TP for a new position."""
+    def activate(self, side: str, entry_price: float, fee_estimate: float = 1.0, wide: bool = False):
+        """Start ratcheting TP for a new position.
+
+        Args:
+            wide: True for long bull/bear runs — wider buffer to avoid shakeouts
+        """
         self.active = True
         self.side = side
         self.entry_price = entry_price
         self.fee_buffer = max(fee_estimate * 2.5, 2.0)  # 2.5x fees as minimum buffer
+        self.wide_mode = wide
         self._activated_at = time.time()
 
         if side == "long":
@@ -47,8 +52,9 @@ class RatchetTP:
             self.watermark = entry_price
 
         self.phase = "protect"
-        logger.info("Ratchet TP activated: %s @ $%.2f, initial TP=$%.2f (%.1f%% stop)",
-                    side, entry_price, self.tp_price, self.initial_stop_pct * 100)
+        logger.info("Ratchet TP activated: %s @ $%.2f, initial TP=$%.2f (%.1f%% stop)%s",
+                    side, entry_price, self.tp_price, self.initial_stop_pct * 100,
+                    " [WIDE MODE]" if wide else "")
 
     def update(self, mark_price: float) -> tuple[bool, str]:
         """Update TP level with current price. Returns (triggered, reason).
@@ -89,11 +95,18 @@ class RatchetTP:
         # Ratchet phase: move TP up every tick
         if self.phase == "ratchet":
             # Buffer scales with profit distance
-            # Near breakeven: tight ($1-2 buffer)
-            # Deep in profit: wider (up to 0.3% buffer)
-            min_buffer = 1.5
-            max_buffer_pct = 0.003  # 0.3% max
-            buffer = max(min_buffer, mark_price * max_buffer_pct * min(1.0, profit_pct / 1.0))
+            # Wide mode: for multi-hour runs, give it room to breathe
+            # Normal mode: tighter for quick bounces
+            if getattr(self, 'wide_mode', False):
+                min_buffer = 4.0           # $4 minimum
+                max_buffer_pct = 0.008     # 0.8% max — survives normal pullbacks
+                scale_over_pct = 2.0       # scale up over 2% profit
+            else:
+                min_buffer = 1.5
+                max_buffer_pct = 0.003     # 0.3% max
+                scale_over_pct = 1.0
+
+            buffer = max(min_buffer, mark_price * max_buffer_pct * min(1.0, profit_pct / scale_over_pct))
             new_tp = mark_price - buffer
 
             if new_tp > self.tp_price:
@@ -127,9 +140,15 @@ class RatchetTP:
             logger.info("Ratchet → RATCHET: riding the run (profit=$%.2f)", profit)
 
         if self.phase == "ratchet":
-            min_buffer = 1.5
-            max_buffer_pct = 0.003
-            buffer = max(min_buffer, mark_price * max_buffer_pct * min(1.0, profit_pct / 1.0))
+            if getattr(self, 'wide_mode', False):
+                min_buffer = 4.0
+                max_buffer_pct = 0.008
+                scale_over_pct = 2.0
+            else:
+                min_buffer = 1.5
+                max_buffer_pct = 0.003
+                scale_over_pct = 1.0
+            buffer = max(min_buffer, mark_price * max_buffer_pct * min(1.0, profit_pct / scale_over_pct))
             new_tp = mark_price + buffer
             if new_tp < self.tp_price:
                 self.tp_price = new_tp

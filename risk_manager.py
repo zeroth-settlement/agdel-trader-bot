@@ -38,6 +38,10 @@ class RiskManager:
         self._has_moved_in_favor: bool = False
         self._has_position: bool = False
 
+        # Dollar-amount overrides (set via API — bypass % calculations)
+        self._sl_price_override: float | None = None
+        self._tp_price_override: float | None = None
+
         # Cooldown state
         self._last_trade_at: float = 0.0
 
@@ -62,6 +66,37 @@ class RiskManager:
         self._watermark_high = 0.0
         self._watermark_low = float("inf")
         self._has_moved_in_favor = False
+        self._sl_price_override = None
+        self._tp_price_override = None
+
+    def set_dollar_targets(self, position_size: float, tp_dollars: float | None = None, sl_dollars: float | None = None):
+        """Set SL/TP by dollar P&L targets. Computes exact price levels from position size.
+
+        Args:
+            position_size: absolute size in ETH (always positive)
+            tp_dollars: take profit in dollars (positive = profit)
+            sl_dollars: stop loss in dollars (positive = max loss, will be applied as negative)
+        """
+        if not self._has_position or position_size <= 0 or self._entry_price <= 0:
+            return
+
+        if tp_dollars is not None and tp_dollars > 0:
+            price_move = tp_dollars / position_size
+            if self._side == "long":
+                self._tp_price_override = self._entry_price + price_move
+            else:
+                self._tp_price_override = self._entry_price - price_move
+            logger.info("TP set: $%.2f profit → price $%.2f (entry $%.2f, size %.4f)",
+                        tp_dollars, self._tp_price_override, self._entry_price, position_size)
+
+        if sl_dollars is not None and sl_dollars > 0:
+            price_move = sl_dollars / position_size
+            if self._side == "long":
+                self._sl_price_override = self._entry_price - price_move
+            else:
+                self._sl_price_override = self._entry_price + price_move
+            logger.info("SL set: -$%.2f loss → price $%.2f (entry $%.2f, size %.4f)",
+                        sl_dollars, self._sl_price_override, self._entry_price, position_size)
 
     def record_trade(self):
         """Record trade timestamp for cooldown tracking."""
@@ -84,7 +119,18 @@ class RiskManager:
 
     def check_stop_loss(self, mark_price: float) -> tuple[bool, str]:
         """Check if stop loss is triggered. Returns (triggered, reason)."""
-        if not self._has_position or self.sl_mode == "off":
+        if not self._has_position:
+            return False, ""
+
+        # Dollar-amount override takes priority
+        if self._sl_price_override:
+            if self._side == "long" and mark_price <= self._sl_price_override:
+                return True, f"SL hit: price ${mark_price:.2f} <= ${self._sl_price_override:.2f}"
+            elif self._side == "short" and mark_price >= self._sl_price_override:
+                return True, f"SL hit: price ${mark_price:.2f} >= ${self._sl_price_override:.2f}"
+            return False, ""
+
+        if self.sl_mode == "off":
             return False, ""
 
         if self.sl_mode == "fixed":
@@ -112,6 +158,14 @@ class RiskManager:
     def check_take_profit(self, mark_price: float) -> tuple[bool, str]:
         """Check if take profit is triggered. First hit wins among three checks."""
         if not self._has_position:
+            return False, ""
+
+        # Dollar-amount override takes priority
+        if self._tp_price_override:
+            if self._side == "long" and mark_price >= self._tp_price_override:
+                return True, f"TP hit: price ${mark_price:.2f} >= ${self._tp_price_override:.2f}"
+            elif self._side == "short" and mark_price <= self._tp_price_override:
+                return True, f"TP hit: price ${mark_price:.2f} <= ${self._tp_price_override:.2f}"
             return False, ""
 
         # 1. Signal target — only if target is ahead of entry (not already reached)
@@ -202,7 +256,10 @@ class RiskManager:
         }
 
         # Compute SL price
-        if self.sl_mode == "fixed":
+        if self._sl_price_override:
+            result["slPrice"] = self._sl_price_override
+            result["slMode"] = "dollar"
+        elif self.sl_mode == "fixed":
             if self._side == "long":
                 result["slPrice"] = self._entry_price * (1 - self.sl_fixed_pct)
             elif self._side == "short":
@@ -215,8 +272,11 @@ class RiskManager:
                 result["slPrice"] = self._watermark_low * (1 + self.sl_trailing_pct)
             result["slMode"] = "trailing"
 
-        # Compute TP price (fixed %)
-        if self._side == "long":
+        # Compute TP price
+        if self._tp_price_override:
+            result["tpPrice"] = self._tp_price_override
+            result["tpMode"] = "dollar"
+        elif self._side == "long":
             result["tpPrice"] = self._entry_price * (1 + self.tp_fixed_pct)
         elif self._side == "short":
             result["tpPrice"] = self._entry_price * (1 - self.tp_fixed_pct)
