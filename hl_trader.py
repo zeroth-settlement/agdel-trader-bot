@@ -658,6 +658,70 @@ class HLTrader:
             logger.error("Failed to fetch/cancel open orders: %s", e)
             return 0
 
+    async def place_stop_order(self, trigger_price: float, size: float, is_buy: bool) -> dict:
+        """Place a trigger stop order on Hyperliquid.
+
+        For a long position SL: is_buy=False (sell to close), trigger when price drops below trigger_price.
+        For a short position SL: is_buy=True (buy to close), trigger when price rises above trigger_price.
+        """
+        if self.mode != "live" or not self._exchange:
+            return {"error": "Not in live mode or exchange not initialized"}
+
+        try:
+            trigger_price = float(trigger_price)
+            size = float(size)
+            # Round size to asset's decimal precision
+            size = round(size, self._sz_decimals)
+
+            order_type = {"trigger": {"triggerPx": round(trigger_price, 2), "isMarket": True, "tpsl": "sl"}}
+            # limit_px must be a float — for market trigger orders, use trigger price
+            limit_px = round(trigger_price, 2)
+            result = self._exchange.order(
+                self.asset,
+                is_buy,
+                float(size),
+                float(limit_px),
+                order_type,
+                reduce_only=True,
+            )
+            logger.info("Stop order placed: trigger=%s size=%s side=%s", trigger_price, size, "buy" if is_buy else "sell")
+            return {"success": True, "triggerPrice": trigger_price, "size": size, "result": str(result)}
+        except Exception as e:
+            logger.error("Failed to place stop order: %s", e, exc_info=True)
+            return {"error": str(e)}
+
+    async def update_stop_order(self, new_trigger_price: float) -> dict:
+        """Cancel existing stop orders and place a new one at the updated trigger price."""
+        if self.mode != "live" or not self._exchange:
+            return {"error": "Not in live mode or exchange not initialized"}
+
+        # Get current position to determine size and direction
+        pos = await self.get_position()
+        if not pos or pos.side == "FLAT":
+            return {"error": "No open position"}
+
+        size = abs(float(pos.size))
+        is_buy = str(pos.side).lower() == "short"  # Buy to close short, sell to close long
+
+        # Cancel existing stop orders first
+        try:
+            resp = await self._http.post("/info", json={
+                "type": "openOrders",
+                "user": self._main_address,
+            })
+            resp.raise_for_status()
+            for order in resp.json():
+                if order.get("coin") == self.asset and order.get("orderType") == "Stop Market":
+                    oid = order.get("oid")
+                    if oid:
+                        self._exchange.cancel(self.asset, oid)
+                        logger.info("Cancelled old stop order %s", oid)
+        except Exception as e:
+            logger.warning("Failed to cancel old stops: %s", e)
+
+        # Place new stop
+        return await self.place_stop_order(new_trigger_price, size, is_buy)
+
     def set_mode(self, mode: str):
         """Switch between paper and live trading."""
         if mode not in ("paper", "live"):

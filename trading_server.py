@@ -1314,6 +1314,21 @@ async def set_take_profit(body: dict):
     return JSONResponse({"error": "Provide 'price' or 'pct'"}, status_code=400)
 
 
+@app.post("/api/risk/hl-stop")
+async def set_hl_stop(body: dict):
+    """Place or update a stop order directly on Hyperliquid.
+
+    Body: {"price": 2169.0}
+    """
+    if not hl_trader:
+        return JSONResponse({"error": "Not initialized"}, status_code=400)
+    price = body.get("price")
+    if not price:
+        return JSONResponse({"error": "price required"}, status_code=400)
+    result = await hl_trader.update_stop_order(float(price))
+    return result
+
+
 @app.post("/api/risk/sync")
 async def sync_risk_from_position():
     """Sync the risk manager with the current HL position.
