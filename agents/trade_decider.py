@@ -66,7 +66,8 @@ RULES:
 7. Do NOT close a position just because it is temporarily underwater. Only close if: the regime has changed, signals have flipped against the thesis, or the safety stop is breached.
 8. REGIME STABILITY — per learning-regime-flip-entry-block, do NOT enter within 5 minutes of a regime transition. If the regime just changed, HOLD and wait for stability.
 9. FEE CIRCUIT BREAKER — per learning-fee-budget-circuit-breaker, if recent trades show $50+ in fees with zero P&L, block all entries for 30 minutes.
-10. TRADE LESS — the biggest edge is NOT trading. 1-2 trades per day is better than 10. Every trade costs fees. Only enter with high conviction and a clear edge that exceeds fees by 2x or more.
+10. TRADE SELECTIVELY — avoid churn, but you can't make money from the sidelines. 1-3 trades per day with real edge beats both 0 trades and 10 trades.
+11. MARKET PARTICIPATION — per market-participation, if you have been flat for 4+ hours with no position, evaluate macro sentiment and longer-horizon signals (15m, 1h). Take a directional position with low leverage (2-3x), small size (20%), and wide stops (4%). Being positioned before a move is better than missing it entirely. A flat ranging market is where you build positions cheaply.
 
 Respond with JSON:
 {{
