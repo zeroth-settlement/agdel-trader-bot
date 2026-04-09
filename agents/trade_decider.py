@@ -60,10 +60,13 @@ RULES:
 1. Every decision MUST cite at least one CxU by alias.
 2. It is better to be in the market than out — per conviction-hold, once a position is entered on a valid thesis, hold through chop until target+fees unless the thesis is invalidated or safety stop is hit.
 3. Only enter when the setup clearly meets the active playbook criteria.
-4. Check fee viability — per hyperliquid-fees, estimate round-trip cost (taker+taker or maker+taker) and ensure expected profit exceeds it.
-5. Size based on conviction — per position-sizing, scale position size with conviction level and adjust leverage based on whether you are actively managing or on autopilot. Check liquidation distance.
-6. Build conviction from signals — per agdel-signal-scoring, interpret quality scores using the ambition × (direction + precision + breakout) formula. Reference per-signal-type CxUs (signal-type-*) for how to interpret each signal type's metadata.
+4. CRITICAL FEE CHECK — per hyperliquid-fees, compute round-trip fee as 2 × takerFeePct × notional. Expected profit MUST exceed 2x the round-trip fee. If not, the answer is HOLD. Most of the time the answer should be HOLD.
+5. Size based on conviction — per position-sizing, scale position size with conviction level. On autopilot (no human monitoring), use low leverage (2-3x max).
+6. Build conviction from signals — per agdel-signal-scoring, interpret quality scores. Need strong consensus before entry.
 7. Do NOT close a position just because it is temporarily underwater. Only close if: the regime has changed, signals have flipped against the thesis, or the safety stop is breached.
+8. REGIME STABILITY — per learning-regime-flip-entry-block, do NOT enter within 5 minutes of a regime transition. If the regime just changed, HOLD and wait for stability.
+9. FEE CIRCUIT BREAKER — per learning-fee-budget-circuit-breaker, if recent trades show $50+ in fees with zero P&L, block all entries for 30 minutes.
+10. TRADE LESS — the biggest edge is NOT trading. 1-2 trades per day is better than 10. Every trade costs fees. Only enter with high conviction and a clear edge that exceeds fees by 2x or more.
 
 Respond with JSON:
 {{
