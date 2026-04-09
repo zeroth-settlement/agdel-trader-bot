@@ -130,7 +130,10 @@ class SignalAssessor(BaseAgent):
             st = s["signalType"]
             if st not in type_quality:
                 type_quality[st] = {"long": 0, "short": 0, "neutral": 0, "total_conf": 0, "count": 0}
-            d = s["direction"].lower()
+            d = str(s["direction"]).lower() if s["direction"] is not None else "neutral"
+            # AGDEL uses 0=LONG, 1=SHORT
+            if d == "0": d = "long"
+            elif d == "1": d = "short"
             if d in type_quality[st]:
                 type_quality[st][d] += 1
             type_quality[st]["total_conf"] += s["confidence"]
@@ -181,8 +184,15 @@ class SignalAssessor(BaseAgent):
     def _extract_direction(self, pred: dict, mark_price: float) -> str:
         """Extract direction from a prediction."""
         direction = pred.get("direction", "")
-        if direction in ("LONG", "SHORT", "NEUTRAL"):
-            return direction
+        # Handle AGDEL integer direction: 0=LONG, 1=SHORT
+        if direction == 0:
+            return "LONG"
+        elif direction == 1:
+            return "SHORT"
+        if isinstance(direction, str):
+            d = direction.upper()
+            if d in ("LONG", "SHORT", "NEUTRAL"):
+                return d
 
         # Infer from target price
         target = pred.get("targetPrice") or pred.get("target_price")
