@@ -664,8 +664,8 @@ class HLTrader:
         For a long position SL: is_buy=False (sell to close), trigger when price drops below trigger_price.
         For a short position SL: is_buy=True (buy to close), trigger when price rises above trigger_price.
         """
-        if self.mode != "live" or not self._exchange:
-            return {"error": "Not in live mode or exchange not initialized"}
+        if not self._exchange:
+            return {"error": "Exchange not initialized — need live mode connection at startup"}
 
         try:
             trigger_price = float(trigger_price)
@@ -692,8 +692,8 @@ class HLTrader:
 
     async def update_stop_order(self, new_trigger_price: float) -> dict:
         """Cancel existing stop orders and place a new one at the updated trigger price."""
-        if self.mode != "live" or not self._exchange:
-            return {"error": "Not in live mode or exchange not initialized"}
+        if not self._exchange:
+            return {"error": "Exchange not initialized — need live mode connection at startup"}
 
         # Get current position to determine size and direction
         pos = await self.get_position()

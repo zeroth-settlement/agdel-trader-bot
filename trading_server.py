@@ -1317,15 +1317,42 @@ async def set_take_profit(body: dict):
 @app.post("/api/risk/hl-stop")
 async def set_hl_stop(body: dict):
     """Place or update a stop order directly on Hyperliquid.
+    Works regardless of paper/live mode — always operates on real HL position.
 
     Body: {"price": 2169.0}
     """
-    if not hl_trader:
-        return JSONResponse({"error": "Not initialized"}, status_code=400)
+    if not hl_trader or not hl_trader._exchange:
+        return JSONResponse({"error": "Exchange not initialized"}, status_code=400)
     price = body.get("price")
     if not price:
         return JSONResponse({"error": "price required"}, status_code=400)
-    result = await hl_trader.update_stop_order(float(price))
+
+    # Always get the REAL HL position, not paper
+    hl_data = await get_hl_position()
+    pos = hl_data.get("position")
+    if not pos or pos.get("side") == "flat":
+        return JSONResponse({"error": "No open HL position"}, status_code=400)
+
+    size = float(pos["size"])
+    is_buy = pos["side"] == "short"
+
+    # Cancel existing stops
+    try:
+        resp = await hl_trader._http.post("/info", json={
+            "type": "openOrders",
+            "user": hl_trader._main_address,
+        })
+        resp.raise_for_status()
+        for order in resp.json():
+            if order.get("coin") == "ETH" and order.get("orderType") == "Stop Market":
+                oid = order.get("oid")
+                if oid:
+                    hl_trader._exchange.cancel("ETH", oid)
+    except Exception:
+        pass
+
+    # Place new stop
+    result = await hl_trader.place_stop_order(float(price), size, is_buy)
     return result
 
 
