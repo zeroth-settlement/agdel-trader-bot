@@ -693,20 +693,35 @@ class HLTrader:
             return {"error": str(e)}
 
     async def update_stop_order(self, new_trigger_price: float) -> dict:
-        """Place new stop order FIRST, then cancel old ones. Never leaves position unprotected."""
+        """Cancel old stops then place new one. Uses modify if possible."""
         if not self._exchange:
             return {"error": "Exchange not initialized — need live mode connection at startup"}
 
-        # Get current position to determine size and direction
-        pos = await self.get_position()
-        if not pos or pos.side == "FLAT":
+        # Get real HL position
+        try:
+            resp = await self._http.post("/info", json={
+                "type": "clearinghouseState",
+                "user": self._main_address,
+            })
+            resp.raise_for_status()
+            state = resp.json()
+            pos_size = 0
+            pos_side = "flat"
+            for pos_data in state.get("assetPositions", []):
+                p = pos_data.get("position", {})
+                if p.get("coin") == self.asset:
+                    szi = float(p.get("szi", 0))
+                    pos_size = abs(szi)
+                    pos_side = "long" if szi > 0 else "short" if szi < 0 else "flat"
+        except Exception as e:
+            return {"error": f"Failed to get position: {e}"}
+
+        if pos_size == 0:
             return {"error": "No open position"}
 
-        size = abs(float(pos.size))
-        is_buy = str(pos.side).lower() == "short"
+        is_buy = pos_side == "short"
 
-        # Get existing stop order IDs BEFORE placing new one
-        old_oids = []
+        # Cancel ALL existing stop orders first
         try:
             resp = await self._http.post("/info", json={
                 "type": "frontendOpenOrders",
@@ -717,24 +732,34 @@ class HLTrader:
                 if order.get("coin") == self.asset and order.get("orderType") == "Stop Market":
                     oid = order.get("oid")
                     if oid:
-                        old_oids.append((oid, order.get("triggerPx")))
+                        self._exchange.cancel(self.asset, oid)
+                        logger.info("Cancelled stop %s (trigger=$%s)", oid, order.get("triggerPx"))
         except Exception as e:
-            logger.warning("Failed to fetch old stops: %s", e)
+            logger.warning("Failed to cancel old stops: %s", e)
 
-        # PLACE NEW STOP FIRST — position is always protected
-        result = await self.place_stop_order(new_trigger_price, size, is_buy)
+        # Small delay to let cancellation settle
+        import asyncio
+        await asyncio.sleep(0.5)
 
-        if not result.get("success"):
-            logger.error("Failed to place new stop — keeping old stop in place")
-            return result
+        # Place new stop
+        result = await self.place_stop_order(new_trigger_price, pos_size, is_buy)
 
-        # New stop is confirmed — NOW cancel old ones
-        for oid, old_trigger in old_oids:
+        # Verify it stuck
+        if result.get("success"):
+            await asyncio.sleep(1)
             try:
-                self._exchange.cancel(self.asset, oid)
-                logger.info("Cancelled old stop %s (trigger=$%s)", oid, old_trigger)
-            except Exception as e:
-                logger.warning("Failed to cancel old stop %s: %s (may have two stops briefly)", oid, e)
+                resp = await self._http.post("/info", json={
+                    "type": "frontendOpenOrders",
+                    "user": self._main_address,
+                })
+                stops = [o for o in resp.json() if o.get("coin") == self.asset and o.get("orderType") == "Stop Market"]
+                if stops:
+                    logger.info("Verified: %d stop(s) on HL, trigger=$%s", len(stops), stops[0].get("triggerPx"))
+                else:
+                    logger.error("STOP NOT FOUND after placement — may have been auto-cancelled")
+                    result["warning"] = "Stop may not have persisted on HL"
+            except Exception:
+                pass
 
         return result
 
