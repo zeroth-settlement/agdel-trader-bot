@@ -1339,7 +1339,7 @@ async def set_hl_stop(body: dict):
     # Cancel existing stops
     try:
         resp = await hl_trader._http.post("/info", json={
-            "type": "openOrders",
+            "type": "frontendOpenOrders",
             "user": hl_trader._main_address,
         })
         resp.raise_for_status()

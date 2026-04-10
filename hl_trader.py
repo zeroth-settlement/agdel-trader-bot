@@ -703,10 +703,10 @@ class HLTrader:
         size = abs(float(pos.size))
         is_buy = str(pos.side).lower() == "short"  # Buy to close short, sell to close long
 
-        # Cancel existing stop orders first
+        # Cancel existing stop orders (use frontendOpenOrders which includes trigger orders)
         try:
             resp = await self._http.post("/info", json={
-                "type": "openOrders",
+                "type": "frontendOpenOrders",
                 "user": self._main_address,
             })
             resp.raise_for_status()
@@ -715,7 +715,7 @@ class HLTrader:
                     oid = order.get("oid")
                     if oid:
                         self._exchange.cancel(self.asset, oid)
-                        logger.info("Cancelled old stop order %s", oid)
+                        logger.info("Cancelled old stop order %s (trigger=$%s)", oid, order.get("triggerPx"))
         except Exception as e:
             logger.warning("Failed to cancel old stops: %s", e)
 
