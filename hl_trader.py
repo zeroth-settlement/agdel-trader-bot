@@ -691,7 +691,7 @@ class HLTrader:
             return {"error": str(e)}
 
     async def update_stop_order(self, new_trigger_price: float) -> dict:
-        """Cancel existing stop orders and place a new one at the updated trigger price."""
+        """Place new stop order FIRST, then cancel old ones. Never leaves position unprotected."""
         if not self._exchange:
             return {"error": "Exchange not initialized — need live mode connection at startup"}
 
@@ -701,9 +701,10 @@ class HLTrader:
             return {"error": "No open position"}
 
         size = abs(float(pos.size))
-        is_buy = str(pos.side).lower() == "short"  # Buy to close short, sell to close long
+        is_buy = str(pos.side).lower() == "short"
 
-        # Cancel existing stop orders (use frontendOpenOrders which includes trigger orders)
+        # Get existing stop order IDs BEFORE placing new one
+        old_oids = []
         try:
             resp = await self._http.post("/info", json={
                 "type": "frontendOpenOrders",
@@ -714,13 +715,26 @@ class HLTrader:
                 if order.get("coin") == self.asset and order.get("orderType") == "Stop Market":
                     oid = order.get("oid")
                     if oid:
-                        self._exchange.cancel(self.asset, oid)
-                        logger.info("Cancelled old stop order %s (trigger=$%s)", oid, order.get("triggerPx"))
+                        old_oids.append((oid, order.get("triggerPx")))
         except Exception as e:
-            logger.warning("Failed to cancel old stops: %s", e)
+            logger.warning("Failed to fetch old stops: %s", e)
 
-        # Place new stop
-        return await self.place_stop_order(new_trigger_price, size, is_buy)
+        # PLACE NEW STOP FIRST — position is always protected
+        result = await self.place_stop_order(new_trigger_price, size, is_buy)
+
+        if not result.get("success"):
+            logger.error("Failed to place new stop — keeping old stop in place")
+            return result
+
+        # New stop is confirmed — NOW cancel old ones
+        for oid, old_trigger in old_oids:
+            try:
+                self._exchange.cancel(self.asset, oid)
+                logger.info("Cancelled old stop %s (trigger=$%s)", oid, old_trigger)
+            except Exception as e:
+                logger.warning("Failed to cancel old stop %s: %s (may have two stops briefly)", oid, e)
+
+        return result
 
     def set_mode(self, mode: str):
         """Switch between paper and live trading."""
