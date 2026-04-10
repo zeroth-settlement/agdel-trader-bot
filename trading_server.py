@@ -490,6 +490,10 @@ async def _run_tick():
         return
     tick_history.append(mark_price)
 
+    # Update paper P&L every tick
+    if hl_trader.mode == "paper":
+        hl_trader.update_paper_pnl(mark_price)
+
     # 2. Fetch position
     position = await hl_trader.get_position()
     pos_dict = position.to_dict() if hasattr(position, "to_dict") else (position or {})

@@ -444,6 +444,8 @@ class HLTrader:
 
     async def _execute_paper(self, action: str, size_pct: float, mark_price: float) -> TradeResult:
         """Simulate a trade in paper mode."""
+        # Update unrealized PnL BEFORE executing so close/flip captures actual gains
+        self.update_paper_pnl(mark_price)
         pos = self._paper_position
         portfolio = await self.get_portfolio()
         equity = portfolio["equity"]
