@@ -117,6 +117,8 @@ async def run():
                           f"(mark=${mark:.2f} P&L=${pnl:.2f} trail={trail_pct*100:.1f}%)", flush=True)
                 else:
                     print(f"[{time.strftime('%H:%M:%S')}] MODIFY FAILED: {result}", flush=True)
+                    # Reset tracked_oid so next cycle re-fetches from HL
+                    tracked_oid = None
 
             elif target_sl > current_sl and not tracked_oid:
                 # No existing stop — place one
