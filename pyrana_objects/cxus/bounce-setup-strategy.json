@@ -1,0 +1,97 @@
+{
+  "alias": "bounce-setup-strategy",
+  "cxu_id": "122030001a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7",
+  "cxu_object": {
+    "claim": "The bounce trade setup requires four steps executed in sequence: first establish an overall market read from macro sentiment and signal consensus to determine bullish or bearish bias, then wait for a spike move in the opposite direction of that read, then enter against the spike with position size and stop loss determined by market regime and a fixed percentage risk budget, then manage the exit with an adaptive trailing stop that tightens as profit grows",
+    "supporting_contexts": [
+      {
+        "text": "Step A — Market Read: Combine macro sentiment (crypto breadth, fear and greed, cross-asset correlation, TradFi indicators) with signal consensus from the direct feed and AGDEL purchased signals. Establish a directional bias: BULLISH, BEARISH, or NEUTRAL. Only look for bounce setups when the read is not NEUTRAL — a strong directional bias means counter-moves are likely to revert.",
+        "line": null
+      },
+      {
+        "text": "Step B — Wait for Counter-Spike: Monitor for a sharp price move AGAINST the established bias. For a bullish read, wait for a spike DOWN (3+ red candles with total drop exceeding the bounce-entry-strategy dropThresholdPct). For a bearish read, wait for a spike UP. The counter-spike creates the entry opportunity — do not chase moves in the direction of the bias.",
+        "line": null
+      },
+      {
+        "text": "Step C — Entry and Initial Stop: Enter against the spike direction (buy the dip if bullish, sell the rip if bearish). Position size and leverage are determined by market regime: ranging = higher conviction (40-65% equity, 5x), trending = moderate (25-40%, 3x), volatile = conservative (15-20%, 2x). Set initial stop loss at a fixed percentage of position value as the risk budget — for example 5% of position value. This is the maximum acceptable loss on the trade.",
+        "line": null
+      },
+      {
+        "text": "Step D — Trailing Stop Management: Once positioned, manage exit with the adaptive trailing stop from stop_manager.py. Trail starts at 1.5% when profit is under $100, tightens to 1.0% at $100-300, to 0.75% at $300-500, and to 0.5% above $500. The stop only moves in the protective direction, never back. This captures the bulk of momentum runs while giving enough room for noise in the early stages.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "prescribed",
+      "claim_type": "procedure",
+      "keywords": ["bounce", "setup", "macro", "counter-spike", "trailing stop", "regime", "entry"],
+      "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"],
+      "evidence_strength": "moderate"
+    },
+    "parameters": {
+      "riskBudgetPct": {
+        "value": 5.0,
+        "min": 2.0,
+        "max": 10.0,
+        "step": 0.5,
+        "description": "Maximum loss as % of position value for initial stop loss"
+      },
+      "rangingSizePct": {
+        "value": 50,
+        "min": 25,
+        "max": 75,
+        "step": 5,
+        "description": "Position size (% of equity) in ranging regime"
+      },
+      "rangingLeverage": {
+        "value": 5,
+        "min": 2,
+        "max": 10,
+        "step": 1,
+        "description": "Max leverage in ranging regime"
+      },
+      "trendingSizePct": {
+        "value": 30,
+        "min": 15,
+        "max": 50,
+        "step": 5,
+        "description": "Position size (% of equity) in trending regime"
+      },
+      "trendingLeverage": {
+        "value": 3,
+        "min": 1,
+        "max": 7,
+        "step": 1,
+        "description": "Max leverage in trending regime"
+      },
+      "volatileSizePct": {
+        "value": 15,
+        "min": 10,
+        "max": 30,
+        "step": 5,
+        "description": "Position size (% of equity) in volatile regime"
+      },
+      "volatileLeverage": {
+        "value": 2,
+        "min": 1,
+        "max": 5,
+        "step": 1,
+        "description": "Max leverage in volatile regime"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-11T00:00:00+00:00",
+    "created_by": "human",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Complete bounce setup strategy: market read → counter-spike → regime-sized entry → adaptive trailing stop",
+    "prior_cxu_id": null,
+    "source": "human-instruction"
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": ["hl-trading", "tier:playbook", "cxu_class:parameter", "approval:agent", "agdel-trader-bot"]
+  }
+}
