@@ -133,9 +133,7 @@ class StopManager:
             return {"success": False, "error": str(e)}
 
     def modify(self, new_trigger: float, size: Optional[float] = None, is_buy: bool = False) -> Dict[str, Any]:
-        """Modify existing stop to a new trigger price. Atomic — no gap.
-
-        Only moves stop in the protective direction (up for long SL, down for short SL).
+        """Move stop to a new trigger price. Cancel old, place new.
 
         Args:
             new_trigger: New trigger price
@@ -144,55 +142,36 @@ class StopManager:
 
         Returns dict with 'success' or 'error'.
         """
-        if not self._state.oid:
-            logger.warning("No tracked stop to modify — placing new one")
-            sz = size or self._state.size
-            if sz <= 0:
-                return {"success": False, "error": "No stop to modify and no size specified"}
-            return self.place(new_trigger, sz, is_buy)
-
-        new_trigger = round(float(new_trigger), 2)
         sz = round(float(size or self._state.size), 4)
-        limit_px = new_trigger - 5 if not is_buy else new_trigger + 5
+        if sz <= 0:
+            return {"success": False, "error": "No size specified"}
 
-        try:
-            ot = {"trigger": {"triggerPx": new_trigger, "isMarket": True, "tpsl": "sl"}}
-            result = self._exchange.modify_order(
-                self._state.oid, self._asset, is_buy, sz, float(limit_px), ot, reduce_only=True
-            )
+        old_trigger = self._state.trigger_price
+        old_oid = self._state.oid
 
-            # Extract new OID
-            new_oid = None
-            statuses = result.get("response", {}).get("data", {}).get("statuses", [])
-            for s in statuses:
-                if "resting" in s:
-                    new_oid = s["resting"]["oid"]
-                elif "error" in s:
-                    logger.error("Stop modify rejected: %s", s["error"])
-                    # Reset state so next call re-fetches from HL
-                    self._state.oid = None
-                    self._state.verified = False
-                    return {"success": False, "error": s["error"]}
+        # Cancel existing stop
+        if old_oid:
+            try:
+                self._exchange.cancel(self._asset, old_oid)
+                logger.info("Cancelled old stop %s ($%.2f)", old_oid, old_trigger)
+            except Exception as e:
+                logger.warning("Cancel failed (may already be gone): %s", e)
 
-            if new_oid:
-                old_trigger = self._state.trigger_price
-                self._state.oid = new_oid
-                self._state.trigger_price = new_trigger
-                self._state.size = sz
-                self._state.verified = False
-                self._state.last_modified_at = time.time()
+        # Place new stop immediately
+        result = self.place(new_trigger, sz, is_buy)
 
-                logger.info("Stop MODIFIED: $%.2f → $%.2f oid=%s", old_trigger, new_trigger, new_oid)
-                return {"success": True, "triggerPrice": new_trigger, "oid": new_oid, "oldTrigger": old_trigger}
+        if result.get("success"):
+            logger.info("Stop MOVED: $%.2f → $%.2f", old_trigger, new_trigger)
+            return {**result, "oldTrigger": old_trigger}
+        else:
+            # Placement failed — try to restore old stop
+            logger.error("New stop failed — attempting to restore old stop at $%.2f", old_trigger)
+            restore = self.place(old_trigger, sz, is_buy)
+            if restore.get("success"):
+                logger.info("Restored old stop at $%.2f", old_trigger)
             else:
-                logger.error("Stop modify returned no OID: %s", result)
-                self._state.oid = None
-                return {"success": False, "error": f"No OID in modify result: {result}"}
-
-        except Exception as e:
-            logger.error("Stop modify error: %s", e)
-            self._state.oid = None
-            return {"success": False, "error": str(e)}
+                logger.error("CRITICAL: Could not restore stop! Position UNPROTECTED")
+            return result
 
     def verify(self) -> bool:
         """Verify the managed stop exists on HL. Returns True if found."""
