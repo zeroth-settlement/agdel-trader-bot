@@ -558,6 +558,27 @@
       <canvas class="chart-canvas" id="priceCanvas"></canvas>
     </div>
 
+    <!-- Signal Conviction Meter -->
+    <div class="py-card" style="margin-bottom:var(--py-space-4);" id="convictionPanel">
+      <div class="py-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="py-text-sm py-text-bold">Signal Conviction</span>
+        <span id="convictionLabel" class="py-text-xs py-text-bold" style="padding:2px 8px;border-radius:var(--py-radius-full);">--</span>
+      </div>
+      <div class="py-card-content">
+        <!-- Conviction gauge -->
+        <div style="display:flex;align-items:center;gap:var(--py-space-2);margin-bottom:var(--py-space-2);">
+          <span class="py-text-xs" style="color:hsl(var(--py-error));min-width:40px;">Bear</span>
+          <div style="flex:1;height:12px;background:hsl(var(--py-border));border-radius:6px;overflow:hidden;position:relative;">
+            <div id="convictionGauge" style="position:absolute;top:0;height:100%;border-radius:6px;transition:all 0.5s;"></div>
+            <div id="convictionMarker" style="position:absolute;top:-2px;width:3px;height:16px;background:#fff;border-radius:2px;transition:left 0.5s;"></div>
+          </div>
+          <span class="py-text-xs" style="color:hsl(var(--py-success));min-width:40px;text-align:right;">Bull</span>
+        </div>
+        <!-- Per-signal breakdown -->
+        <div id="convictionBreakdown" style="display:flex;flex-wrap:wrap;gap:4px;font-size:0.7rem;"></div>
+      </div>
+    </div>
+
     <!-- Order Book Panel -->
     <div class="py-card" style="margin-bottom:var(--py-space-4);" id="orderbookPanel">
       <div class="py-card-header" style="display:flex;justify-content:space-between;align-items:center;">
@@ -1028,6 +1049,7 @@
         renderPositionCards,
         renderCandlestickChart,
         renderSignals,
+        renderConviction,
         renderOrderBook,
         renderMacroSentiment,
       ];
@@ -2153,6 +2175,82 @@
 
     // ─── Signals ────────────────────────────────────────────────────
     // ─── Order book panel ────────────────────────────────────────
+    // ─── Signal conviction meter ─────────────────────────────────
+    function renderConviction() {
+      const preds = state.predictions || [];
+      if (preds.length === 0) return;
+
+      const price = state.markPrice || 0;
+      if (!price) return;
+
+      // Compute per-signal-type conviction from range asymmetry
+      const byType = {};
+      preds.forEach(p => {
+        if (p.expired) return;
+        const agent = (p.signal_type || p.agent || '?').replace('-signal', '');
+        const target = p.target_price || p.targetPrice || 0;
+        const entry = p.entry_price || p.entryPrice || price;
+        const conf = p.confidence || p.cc || 0;
+        if (!target || conf < 0.01) return;
+
+        // Skew: how far target is from entry as %
+        const skew = (target - entry) / entry * 100;
+
+        if (!byType[agent]) byType[agent] = { totalSkew: 0, totalConf: 0, count: 0 };
+        byType[agent].totalSkew += skew * conf;
+        byType[agent].totalConf += conf;
+        byType[agent].count++;
+      });
+
+      // Overall weighted conviction
+      let totalWeightedSkew = 0, totalWeight = 0;
+      const badges = [];
+      for (const [agent, d] of Object.entries(byType)) {
+        const avgSkew = d.totalConf > 0 ? d.totalSkew / d.totalConf : 0;
+        const avgConf = d.count > 0 ? d.totalConf / d.count : 0;
+        totalWeightedSkew += avgSkew * avgConf;
+        totalWeight += avgConf;
+
+        const bias = avgSkew > 0.01 ? 'LONG' : avgSkew < -0.01 ? 'SHORT' : 'FLAT';
+        const color = bias === 'LONG' ? 'hsl(var(--py-success))' : bias === 'SHORT' ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
+        const bgColor = bias === 'LONG' ? 'hsl(var(--py-success) / 0.15)' : bias === 'SHORT' ? 'hsl(var(--py-error) / 0.15)' : 'hsl(var(--py-fg-muted) / 0.1)';
+        badges.push(`<span style="padding:2px 6px;border-radius:3px;background:${bgColor};color:${color};">${agent} <b>${bias}</b></span>`);
+      }
+
+      const overall = totalWeight > 0 ? totalWeightedSkew / totalWeight : 0;
+
+      // Label
+      const label = document.getElementById('convictionLabel');
+      const conviction = overall > 0.02 ? 'BULLISH' : overall < -0.02 ? 'BEARISH' : 'NEUTRAL';
+      label.textContent = `${conviction} (${(overall * 100).toFixed(1)}%)`;
+      label.style.background = conviction === 'BULLISH' ? 'hsl(var(--py-success) / 0.2)' : conviction === 'BEARISH' ? 'hsl(var(--py-error) / 0.2)' : 'hsl(var(--py-fg-muted) / 0.2)';
+      label.style.color = conviction === 'BULLISH' ? 'hsl(var(--py-success))' : conviction === 'BEARISH' ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
+
+      // Gauge: -0.1 to +0.1 mapped to 0-100%
+      const gaugePos = Math.max(0, Math.min(100, (overall + 0.1) / 0.2 * 100));
+      const gauge = document.getElementById('convictionGauge');
+      const marker = document.getElementById('convictionMarker');
+
+      // Color gradient: red left, green right
+      if (gaugePos > 55) {
+        gauge.style.left = '50%';
+        gauge.style.width = (gaugePos - 50) + '%';
+        gauge.style.background = 'hsl(var(--py-success))';
+      } else if (gaugePos < 45) {
+        gauge.style.left = gaugePos + '%';
+        gauge.style.width = (50 - gaugePos) + '%';
+        gauge.style.background = 'hsl(var(--py-error))';
+      } else {
+        gauge.style.left = '48%';
+        gauge.style.width = '4%';
+        gauge.style.background = 'hsl(var(--py-fg-muted))';
+      }
+      marker.style.left = gaugePos + '%';
+
+      // Breakdown badges
+      document.getElementById('convictionBreakdown').innerHTML = badges.join('');
+    }
+
     function renderOrderBook() {
       const ob = state.orderbook;
       if (!ob) return;
