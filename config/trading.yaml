@@ -1,72 +1,53 @@
-# AgDel Trader Bot — Runtime Configuration
-# Strategy policy lives in CxUs, not here.
-# This file is for infrastructure parameters only.
-
-trading:
-  enable: true
-  assets: [ETH]
-  paperStartingBalanceUsd: 5000
-  loopIntervalMs: 5000
-
-# Risk management (hard safety net, runs every tick)
-autoTrade:
-  enabled: false
-  stopLoss:
-    mode: trailing
-    trailingPct: 0.03
-    fixedPct: 0.06
-  takeProfit:
-    fixedPct: 0.08
-    trailingPct: 0.04
-
-# Agent pipeline
-agentPipeline:
-  model: claude-sonnet-4-6
-  fallbackModels:
-    - gpt-4o
-  temperature: 0.05
-  minDecisionIntervalMs: 300000  # 5 minutes between full pipeline runs (was 2 — too frequent)
-  maxTokens: 1000
-  # Minimum expected profit must exceed 2x round-trip fees before entering
-  minProfitToFeeRatio: 2.0
-
-# Reflection (CxU evolution)
-reflection:
-  enabled: true
-  intervalSeconds: 1800  # 30 minutes
-  minTradesForReflection: 3
-  minSignalsForReflection: 5
-
-# Signal feed (direct from signal bot on Coolify)
-# Can be overridden by SIGNAL_FEED_URL and SIGNAL_FEED_AUTH env vars
-signalFeed:
-  enabled: true
-  baseUrl: https://agdel-signal-bots.demo.pyrana.ai
-  auth: pyrana:pyrana
-  pollIntervalSeconds: 10
-
-# AGDEL marketplace (purchased signals)
 agdel:
-  enabled: true
   autoBuy: false
   budget:
     maxCostPerSignalUsdc: 2.0
-    maxHourlySpendUsdc: 50.0
     maxDailySpendUsdc: 250.0
+    maxHourlySpendUsdc: 50.0
+  enabled: true
+  makerFilters:
+    blockedSignalTypes:
+    - basis
+    - bb-reversal
+    minWinRate: 0.1
   selection:
     targetHorizons:
-      5m: 6
       15m: 8
-  makerFilters:
-    minWinRate: 0.1
-    blockedSignalTypes:
-      - basis
-      - bb-reversal
-
-# Sentiment gating
-sentimentBias:
-  enabled: true
-
-# Bounce trigger
+      5m: 6
+agentPipeline:
+  fallbackModels:
+  - gpt-4o
+  maxTokens: 1000
+  minDecisionIntervalMs: 300000
+  minProfitToFeeRatio: 2.0
+  model: claude-sonnet-4-6
+  temperature: 0.05
+autoTrade:
+  enabled: false
+  stopLoss:
+    fixedPct: 0.06
+    mode: trailing
+    trailingPct: 0.03
+  takeProfit:
+    fixedPct: 0.08
+    trailingPct: 0.04
 bounceTrigger:
   enabled: false
+reflection:
+  enabled: true
+  intervalSeconds: 1800
+  minSignalsForReflection: 5
+  minTradesForReflection: 3
+sentimentBias:
+  enabled: true
+signalFeed:
+  auth: pyrana:pyrana
+  baseUrl: https://agdel-signal-bots.demo.pyrana.ai
+  enabled: true
+  pollIntervalSeconds: 10
+trading:
+  assets:
+  - ETH
+  enable: true
+  loopIntervalMs: 5000
+  paperStartingBalanceUsd: 2000
