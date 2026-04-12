@@ -1,0 +1,45 @@
+{
+  "alias": "training-sell-20260409-194600",
+  "cxu_id": "1220b74b568fc5cb371d3dcfc06010461e3b88cb7ec6bc689782b1e9acd7f33c840d",
+  "cxu_object": {
+    "claim": "Human trader executed sell at $2,217.65 in trending_up regime. Reasoning: I think we are nearing the top of a spike lets short",
+    "supporting_contexts": [
+      {
+        "text": "Manual sell at 2026-04-09T19:46:00.894787+00:00. Price: $2,217.65, regime: trending_up, BB: 94%, trend: 0.2717%, signal consensus: 52% LONG. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-09T19:46:00.895180+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

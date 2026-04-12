@@ -1,0 +1,45 @@
+{
+  "alias": "playbook-ratcheting-trailing-stop",
+  "cxu_id": "12208890d033be76db2116f714a7a47816d3e836d8293ae677605d447b7b62811f85",
+  "cxu_object": {
+    "claim": "Trailing stops must tighten dynamically as unrealized profit grows to protect captured gains \u2014 start at 1.5% trail, tighten to 0.75% once unrealized profit exceeds $200, and tighten further to 0.5% once unrealized profit exceeds $400. This ratcheting mechanic prevents giving back large open profits on reversals. Additionally, if a position is stopped out but the original thesis remains valid (regime unchanged, signal consensus unchanged), re-entering the same direction wastes fees and resets the cost basis unfavorably \u2014 in this case it is better to widen the stop pre-emptively and hold rather than accept a stop-out and pay re-entry fees. The ratchet only moves in one direction: stops tighten as profit grows and never loosen once tightened. Observed instance: long position accumulated $500+ unrealized profit in volatile regime, 1.5% trailing stop was too loose, price reversed and gave back most of the move. Had the stop ratcheted to 0.5% at the $400 profit threshold, a significant portion of the gain would have been locked in.",
+    "supporting_contexts": [
+      {
+        "text": "Human observation at 2026-04-10T16:00:44.202574+00:00: Had a long position that ran up $500+ in unrealized profit but the 1.5% trailing stop was too loose to capture the gains. Price reversed and gave back most of the move. The trailing stop should tighten dynamically as profit grows \u2014 for example, start at 1.5% but tighten to 0.75% once profit exceeds $200, and to 0.5% once profit exceeds $400. This is a ratcheting ratchet \u2014 the trail itself gets tighter as the position becomes more profitable. Also, re-entering the same trade direction after a stop-out wastes fees \u2014 if the thesis hasnt changed, it is better to widen the stop and hold rather than get stopped out and re-enter.. Market context: volatile regime, $2223.75, BB=21%, trend=-1.0423%, position=FLAT.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:playbook",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-10T16:00:44.202694+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:playbook",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

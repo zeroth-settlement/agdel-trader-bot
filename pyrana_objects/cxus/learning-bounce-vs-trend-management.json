@@ -1,0 +1,57 @@
+{
+  "alias": "learning-bounce-vs-trend-management",
+  "cxu_id": "1220cce64045cad784847aa51e6db78290343442ffa7bb01d905d3dc29712d936679",
+  "cxu_object": {
+    "claim": "Bounce trades and trend trades require fundamentally different management approaches because bounce trades demand active monitoring with tight trailing stops while trend trades should use smaller position sizes with wider guardrails and automated management since the trader will not be watching continuously",
+    "supporting_contexts": [
+      {
+        "text": "Observation from live trading 2026-04-12: Entered a long position overnight during low chop expecting a trend continuation. Position held too long and slowly slid toward the stop limit. Manually overrode the approaching SL thinking it would recover, but then a spike down hit the very low system SL. The mistake was treating a trend trade like a bounce trade \u2014 not paying attention while the position deteriorated, then panic-overriding the safety net.",
+        "line": null
+      },
+      {
+        "text": "Rule: Bounce trades (short-term, counter-spike) require active monitoring \u2014 the trader must be watching and ready to act. The adaptive trailing stop handles the exit but the trader needs to be present. Trend trades (longer-term, directional conviction) should assume the trader is NOT watching \u2014 use smaller size (15-20% vs 50-65%), lower leverage (2-3x vs 5x), wider initial stop (3-5% vs 1.5%), and never manually override the stop loss.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "finding",
+      "keywords": [
+        "bounce",
+        "trend",
+        "management",
+        "attention",
+        "stop loss",
+        "override",
+        "position size"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:playbook",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-12T14:09:34.251744+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:playbook",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

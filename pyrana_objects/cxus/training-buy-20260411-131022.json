@@ -1,0 +1,45 @@
+{
+  "alias": "training-buy-20260411-131022",
+  "cxu_id": "122068995c37a461688004e55f50e02e5fb75966d321cc6fc6859eab088a0d849de1",
+  "cxu_object": {
+    "claim": "Human trader executed buy at $2,238.75 in ranging regime. Reasoning: this is falling into our scenario will increase the position if it drops below the 5 min bb",
+    "supporting_contexts": [
+      {
+        "text": "Manual buy at 2026-04-11T13:10:22.724188+00:00. Price: $2,238.75, regime: ranging, BB: 0%, trend: -0.2272%, signal consensus: 60% LONG. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-11T13:10:22.724323+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

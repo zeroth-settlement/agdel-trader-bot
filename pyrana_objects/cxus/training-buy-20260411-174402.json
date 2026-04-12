@@ -1,0 +1,45 @@
+{
+  "alias": "training-buy-20260411-174402",
+  "cxu_id": "12207b66810dd20b2852411834af91fb3e69d7db9b4b672c4d7f60899416e5c9ad32",
+  "cxu_object": {
+    "claim": "Human trader executed buy at $2,261.15 in ranging regime. Reasoning: will take a small position to ride out today's bull run",
+    "supporting_contexts": [
+      {
+        "text": "Manual buy at 2026-04-11T17:44:02.289549+00:00. Price: $2,261.15, regime: ranging, BB: 23%, trend: 0.2127%, signal consensus: 70% LONG. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-11T17:44:02.289686+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}
