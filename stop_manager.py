@@ -97,6 +97,9 @@ class StopManager:
         # For sell stops, limit must be below trigger
         limit_px = trigger_price - 5 if not is_buy else trigger_price + 5
 
+        logger.info("PLACE: trigger=$%.2f limit=$%.2f size=%.4f is_buy=%s asset=%s",
+                     trigger_price, limit_px, size, is_buy, self._asset)
+
         try:
             ot = {"trigger": {"triggerPx": trigger_price, "isMarket": True, "tpsl": "sl"}}
             result = self._exchange.order(
@@ -157,7 +160,10 @@ class StopManager:
             except Exception as e:
                 logger.warning("Cancel failed (may already be gone): %s", e)
 
-        # Place new stop immediately
+        # Wait for cancel to settle on HL
+        import time; time.sleep(2)
+
+        # Place new stop
         result = self.place(new_trigger, sz, is_buy)
 
         if result.get("success"):
