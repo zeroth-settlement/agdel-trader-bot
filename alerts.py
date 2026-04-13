@@ -194,7 +194,7 @@ class AlertManager:
         )
 
         try:
-            await self._http.post(
+            resp = await self._http.post(
                 f"https://ntfy.sh/{NTFY_TOPIC}",
                 content=message.encode(),
                 headers={
@@ -203,5 +203,7 @@ class AlertManager:
                     "Tags": "chart_with_downwards_trend,eth",
                 },
             )
+            logger.info("ntfy sent: %s (status=%s)", watch.name, resp.status_code)
         except Exception as e:
-            logger.warning("Failed to send ntfy notification: %s", e)
+            logger.warning("Failed to send ntfy: %s — recreating client", e)
+            self._http = httpx.AsyncClient(timeout=5)

@@ -1,0 +1,56 @@
+{
+  "alias": "learning-never-test-on-live",
+  "cxu_id": "1220e02c54bf83a819abf8000d3c0ac8d8a920aff7335eb73fb8af4bc2d29d148645",
+  "cxu_object": {
+    "claim": "Never run experimental or debug code against live Hyperliquid positions because testing stop order variations on a live account caused both stops to be cancelled leaving the position unprotected and resulting in an unintended close",
+    "supporting_contexts": [
+      {
+        "text": "On 2026-04-13 while debugging stop placement for a short position, two test stops were placed on the live account (testing tpsl=sl vs tpsl=tp). When attempting to cancel the duplicate, both stops were removed. The position was left unprotected and closed. All stop order testing must happen on paper positions or with a separate test wallet, never on live positions with real money at risk.",
+        "line": null
+      },
+      {
+        "text": "Rule: The stop_manager module must have a test mode that uses a separate wallet or paper position. Any new stop order logic must be validated in paper mode first. The cancel operation must verify it is only cancelling the intended order by checking the OID matches before cancelling. Never place multiple stops on a live position for testing purposes.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "axiom",
+      "claim_type": "requirement",
+      "keywords": [
+        "testing",
+        "live",
+        "stop loss",
+        "cancel",
+        "safety",
+        "critical"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:axiom",
+        "cxu_class:hypothesis",
+        "approval:human",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-13T13:35:12.295132+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:axiom",
+      "cxu_class:hypothesis",
+      "approval:human",
+      "agdel-trader-bot"
+    ]
+  }
+}
