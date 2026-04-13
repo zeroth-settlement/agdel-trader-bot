@@ -1615,131 +1615,88 @@
         ctx.fillText('NOW', divX, margin.top - 5);
       }
 
-      // Signal projection zone — mirrors signal bot dashboard style
-      // Each signal plotted at (X=horizon, Y=target price) with lines from NOW
+      // Signal projection zone — conviction-weighted target zones
+      // Only shows high-conviction signals, sized by directional skew
       if (visible.length > 0 && predictions.length > 0) {
         const lastCandleX = margin.left + (visible.length - 1) * step + candleWidth / 2;
-        const projectionZone = W - margin.right - lastCandleX - 5; // All space after last candle
-        const projectionStart = lastCandleX + 10;
+        const projZone = W - margin.right - lastCandleX - 5;
+        const projStart = lastCandleX + 10;
+        const hzOrder = { '1m': 0.08, '5m': 0.25, '15m': 0.5, '30m': 0.7, '1h': 0.9 };
 
-        // Horizon X positions (proportional to time)
-        const hzOrder = { '1m': 0.05, '5m': 0.15, '15m': 0.4, '30m': 0.6, '1h': 0.85 };
-
-        // Filter: has target, not expired
-        const activePreds = predictions.filter(p => {
+        // Compute per-signal-type conviction and weighted target
+        const byType = {};
+        predictions.forEach(p => {
+          if (p.expired) return;
           const target = p.target_price || p.targetPrice;
-          return target && target > 0 && !p.expired;
+          const entry = p.entry_price || p.entryPrice || nowPrice;
+          const conf = p.confidence || p.cc || 0;
+          const hz = p.hz || p.horizon || '5m';
+          const agent = (p.signal_type || p.agent || '?').replace('-signal', '');
+          if (!target || conf < 0.05) return;
+
+          const skew = (target - entry) / entry;  // directional conviction
+          const key = agent + '_' + hz;
+          if (!byType[key]) byType[key] = { agent, hz, totalSkew: 0, totalConf: 0, weightedTarget: 0, count: 0 };
+          byType[key].totalSkew += skew * conf;
+          byType[key].totalConf += conf;
+          byType[key].weightedTarget += target * conf;
+          byType[key].count++;
         });
 
-        let longCount = 0, shortCount = 0;
+        // Filter to signals with real conviction (|skew| > 0.01%)
+        const signals = Object.values(byType)
+          .map(d => ({
+            ...d,
+            avgSkew: d.totalConf > 0 ? d.totalSkew / d.totalConf : 0,
+            avgConf: d.count > 0 ? d.totalConf / d.count : 0,
+            avgTarget: d.totalConf > 0 ? d.weightedTarget / d.totalConf : nowPrice,
+          }))
+          .filter(d => Math.abs(d.avgSkew) > 0.0001 && d.avgConf > 0.05);
 
-        // Draw connecting lines first (behind dots)
-        ctx.globalAlpha = 0.15;
-        ctx.lineWidth = 0.5;
-        activePreds.forEach(pred => {
-          const target = pred.target_price || pred.targetPrice;
-          const hz = pred.hz || pred.horizon || '5m';
-          const dir = String(pred.direction || '').toLowerCase();
-          const hzFrac = hzOrder[hz] || 0.5;
-          const dotX = projectionStart + projectionZone * hzFrac;
-          const dotY = toY(target);
-          if (dotY < margin.top - 20 || dotY > H - margin.bottom + 20) return;
+        // Draw each high-conviction signal as a target marker
+        signals.forEach(sig => {
+          const hzFrac = hzOrder[sig.hz] || 0.5;
+          const x = projStart + projZone * hzFrac;
+          const y = toY(sig.avgTarget);
+          if (y < margin.top - 10 || y > H - margin.bottom + 10) return;
 
-          ctx.strokeStyle = dir === 'long' ? 'hsl(145 70% 50%)' : dir === 'short' ? 'hsl(0 70% 50%)' : 'hsl(220 50% 50%)';
-          ctx.beginPath();
-          ctx.moveTo(lastCandleX, toY(nowPrice));
-          ctx.lineTo(dotX, dotY);
-          ctx.stroke();
-        });
-        ctx.globalAlpha = 1;
+          const isLong = sig.avgSkew > 0;
+          const conviction = Math.min(1, Math.abs(sig.avgSkew) * 500);  // Normalize skew to 0-1
+          const alpha = 0.3 + conviction * 0.5;
+          const sz = 4 + conviction * 6;  // Bigger = more convicted
 
-        // Use a seeded hash for stable jitter (no random jumping)
-        const hashJitter = (str, i) => ((str.charCodeAt(0) || 0) * 7 + i * 13) % 20 - 10;
-
-        // Draw dots with horizon labels
-        activePreds.forEach((pred, idx) => {
-          const target = pred.target_price || pred.targetPrice;
-          if (!target || target <= 0) return;
-          const conf = pred.confidence || pred.cc || 0.3;
-          const dir = String(pred.direction || '').toLowerCase();
-          const hz = pred.hz || pred.horizon || '5m';
-          const sigType = pred.signal_type || pred.signalType || '';
-
-          const hzFrac = hzOrder[hz] || 0.5;
-          const jitterX = hashJitter(sigType, idx);
-          const jitterY = hashJitter(hz, idx * 3);
-          const dotX = projectionStart + projectionZone * hzFrac + jitterX;
-          const dotY = toY(target) + jitterY * 0.3;
-
-          if (dotY < margin.top - 20 || dotY > H - margin.bottom + 20) return;
-
-          const alpha = 0.4 + conf * 0.5;
-          const isLong = dir === 'long';
-          const isShort = dir === 'short';
-          if (isLong) longCount++;
-          else if (isShort) shortCount++;
-
-          // Shape: triangle for long (▲), inverted triangle for short (▼), diamond for flat
-          const sz = 4 + conf * 3;
+          // Color by direction, opacity by conviction
           ctx.globalAlpha = alpha;
-          ctx.fillStyle = isLong ? 'hsl(145 70% 50%)' : isShort ? 'hsl(0 65% 55%)' : 'hsl(45 70% 55%)';
+          ctx.fillStyle = isLong ? 'hsl(145 70% 50%)' : 'hsl(0 65% 55%)';
 
+          // Draw circle sized by conviction
           ctx.beginPath();
-          if (isLong) {
-            // Triangle pointing up
-            ctx.moveTo(dotX, dotY - sz);
-            ctx.lineTo(dotX - sz * 0.7, dotY + sz * 0.5);
-            ctx.lineTo(dotX + sz * 0.7, dotY + sz * 0.5);
-          } else if (isShort) {
-            // Triangle pointing down
-            ctx.moveTo(dotX, dotY + sz);
-            ctx.lineTo(dotX - sz * 0.7, dotY - sz * 0.5);
-            ctx.lineTo(dotX + sz * 0.7, dotY - sz * 0.5);
-          } else {
-            // Diamond
-            ctx.moveTo(dotX, dotY - sz);
-            ctx.lineTo(dotX + sz * 0.6, dotY);
-            ctx.lineTo(dotX, dotY + sz);
-            ctx.lineTo(dotX - sz * 0.6, dotY);
-          }
-          ctx.closePath();
+          ctx.arc(x, y, sz, 0, Math.PI * 2);
           ctx.fill();
 
-          // Horizon label on high-confidence signals
-          if (conf > 0.35) {
-            ctx.globalAlpha = alpha * 0.8;
-            ctx.fillStyle = ctx.fillStyle;
-            ctx.font = 'bold 7px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(hz, dotX, dotY - sz - 2);
-          }
+          // Line from current price to target
+          ctx.strokeStyle = ctx.fillStyle;
+          ctx.lineWidth = 0.8;
+          ctx.globalAlpha = alpha * 0.4;
+          ctx.beginPath();
+          ctx.moveTo(lastCandleX, toY(nowPrice));
+          ctx.lineTo(x, y);
+          ctx.stroke();
+
+          // Label: signal type
+          ctx.globalAlpha = alpha;
+          ctx.font = '8px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(sig.agent, x, y - sz - 3);
           ctx.globalAlpha = 1;
         });
 
-        // Consensus bar (top right of projection zone)
-        const total = longCount + shortCount;
-        if (total > 0) {
-          const longPct = longCount / total;
-          const barX = projectionStart + projectionZone * 0.3;
-          const barY = margin.top + 5;
-          const barW = projectionZone * 0.4, barH = 5;
-          ctx.fillStyle = 'hsl(0 70% 50%)';
-          ctx.fillRect(barX, barY, barW, barH);
-          ctx.fillStyle = 'hsl(145 70% 50%)';
-          ctx.fillRect(barX, barY, barW * longPct, barH);
-          ctx.font = '8px monospace';
-          ctx.fillStyle = 'hsl(222 10% 55%)';
-          ctx.textAlign = 'center';
-          ctx.fillText(`${longCount}L / ${shortCount}S`, barX + barW/2, barY + barH + 9);
-        }
-
-        // Horizon axis labels along bottom of projection zone
+        // Horizon labels
         ctx.font = '8px monospace';
         ctx.fillStyle = 'hsl(222 10% 35%)';
         ctx.textAlign = 'center';
         for (const [hz, frac] of Object.entries(hzOrder)) {
-          const x = projectionStart + projectionZone * frac;
-          ctx.fillText(hz, x, H - margin.bottom + 14);
+          ctx.fillText(hz, projStart + projZone * frac, H - margin.bottom + 14);
         }
       }
 
