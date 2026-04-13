@@ -1,0 +1,56 @@
+{
+  "alias": "learning-stop-on-position-add",
+  "cxu_id": "122065f32718e7ca2af76769d3d75bf77ff41781f0f73eb4b3aa1081678218c7c273",
+  "cxu_object": {
+    "claim": "When a trader adds to an existing position the trailing stop ratchet must NOT automatically apply the existing stop level to the new combined position because the old stop was calculated for the original entry and size and applying it to additional shares bought at a lower price during a dip will immediately close the new position before the bounce can play out",
+    "supporting_contexts": [
+      {
+        "text": "On 2026-04-13 a long position was open with a trailing stop. Price dipped and the trader bought more to add to the position expecting a bounce. The original SL triggered and closed the first position (correct behavior). But then a new SL was immediately placed on the added position at the old stop level, which was too close to current price. This closed the added position before the bounce occurred. The trader lost the opportunity to profit from the bounce they correctly identified.",
+        "line": null
+      },
+      {
+        "text": "Rule: When position size increases (trader adds), the ratchet must reset its watermark to current price and recalculate the stop based on the NEW entry price and the traders stated risk budget. It should NOT carry over the old stop level. The ratchet should detect position size changes and prompt for a new risk budget, or at minimum use the wider initial trail (1.5%) from the new entry price.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "requirement",
+      "keywords": [
+        "position add",
+        "trailing stop",
+        "ratchet",
+        "size change",
+        "bounce",
+        "reset"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:playbook",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-13T18:01:08.527742+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:playbook",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}
