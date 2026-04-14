@@ -1,0 +1,89 @@
+{
+  "alias": "graceful-unwind",
+  "cxu_id": "1220e9fc6f62b055274eed0038866cc60eb5725c236a868decdb18845293f051319b",
+  "cxu_object": {
+    "claim": "When a position is oversized or not panning out the graceful unwind strategy reduces exposure in halves using paired TP and SL orders rather than closing the entire position at a loss because selling half at breakeven plus half at a controlled loss is better than panic-closing the whole thing and it keeps you in the market to capture a recovery",
+    "supporting_contexts": [
+      {
+        "text": "The graceful unwind places three orders simultaneously: (1) Take Profit at breakeven for half the position \u2014 if price recovers you exit half at no loss. (2) Stop Loss at a tight level for the same half \u2014 if price drops further you cut half at a controlled loss. (3) A wider safety Stop Loss for the remaining half to prevent liquidation. Whichever triggers first reduces your size by 50% and your risk proportionally.",
+        "line": null
+      },
+      {
+        "text": "After the first half exits (either via TP or SL), the remaining half gets an adaptive trailing stop. If TP filled (price went up), the ratchet trails the recovery. If SL filled (price went down), the safety stop protects the rest while giving room for a bounce. This approach avoids the all-or-nothing mentality that leads to either panic-closing at the bottom or holding a losing position too long.",
+        "line": null
+      },
+      {
+        "text": "Example from 2026-04-13: 27.5 ETH long at $2,369 underwater. Instead of closing all at a loss, placed TP at $2,371.50 (breakeven) for 13.77 ETH, SL at $2,358 for 13.77 ETH, and safety SL at $2,300 for remaining 13.77 ETH. Overnight ratchet watches for TP fill then trails the rest. Reduces maximum exposure by 50% while keeping upside potential.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "prescribed",
+      "claim_type": "procedure",
+      "keywords": [
+        "unwind",
+        "reduce",
+        "half position",
+        "TP",
+        "SL",
+        "oversized",
+        "risk reduction",
+        "graceful"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:playbook",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    },
+    "parameters": {
+      "reducePct": {
+        "value": 50,
+        "min": 25,
+        "max": 75,
+        "step": 5,
+        "description": "Percentage of position to reduce on first exit"
+      },
+      "tpOffset": {
+        "value": "breakeven",
+        "description": "TP target \u2014 typically breakeven (entry + RT fees)"
+      },
+      "tightSlPct": {
+        "value": 0.5,
+        "min": 0.2,
+        "max": 2.0,
+        "step": 0.1,
+        "description": "Tight SL as % below entry for the first half"
+      },
+      "safetySlPct": {
+        "value": 3.0,
+        "min": 1.5,
+        "max": 5.0,
+        "step": 0.5,
+        "description": "Safety SL as % below entry for the remaining half (must be above liquidation)"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-14T03:40:03.632731+00:00",
+    "created_by": "human",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:playbook",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}
