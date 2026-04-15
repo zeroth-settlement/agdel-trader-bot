@@ -86,14 +86,41 @@ async def run():
                 if spike_down_move >= SPIKE_THRESHOLD and is_stall and now - last_alert_time > COOLDOWN:
                     price = c4.get("c", 0)
                     bottom = min(c3.get("l", 0), c4.get("l", 0))
-                    print(f"[{time.strftime('%H:%M:%S')}] SPIKE DOWN DETECTED: -${spike_down_move:.2f} in 2 candles, "
-                          f"stall body=${stall_body:.2f} → BUY THE DIP @ ${price:.2f}",
-                          flush=True)
-                    last_alert_time = now
-                    await send_alert(client, "Spike DOWN — Buy the Dip",
-                                     f"Price dropped -${spike_down_move:.1f} in 2 candles then stalled. "
-                                     f"Bottom: ${bottom:.2f}. Potential bounce entry.",
-                                     price)
+
+                    # Check if we have an open long — dip is an add opportunity
+                    has_long = False
+                    try:
+                        pos_resp = await client.get(f"{TRADING_SERVER}/api/position/hl")
+                        pos_data = pos_resp.json().get("position")
+                        if pos_data and pos_data.get("side") == "long":
+                            has_long = True
+                            pos_entry = pos_data.get("entryPrice", 0)
+                            pos_size = pos_data.get("size", 0)
+                    except:
+                        pass
+
+                    if has_long:
+                        discount = ((pos_entry - price) / pos_entry * 100) if pos_entry else 0
+                        print(f"[{time.strftime('%H:%M:%S')}] DIP while LONG: -${spike_down_move:.2f}, "
+                              f"stalled @ ${price:.2f} — {discount:.1f}% below entry. ADD opportunity.",
+                              flush=True)
+                        last_alert_time = now
+                        await send_alert(client, "Dip While Long — Add Opportunity",
+                                         f"Price dipped -${spike_down_move:.1f} then stalled. "
+                                         f"You're long {pos_size} ETH @ ${pos_entry:.2f}. "
+                                         f"Current: ${price:.2f} ({discount:.1f}% below entry). "
+                                         f"Momentum stalled — potential add to position at discount. "
+                                         f"Check SL distance before adding.",
+                                         price)
+                    else:
+                        print(f"[{time.strftime('%H:%M:%S')}] SPIKE DOWN DETECTED: -${spike_down_move:.2f} in 2 candles, "
+                              f"stall body=${stall_body:.2f} → BUY THE DIP @ ${price:.2f}",
+                              flush=True)
+                        last_alert_time = now
+                        await send_alert(client, "Spike DOWN — Buy the Dip",
+                                         f"Price dropped -${spike_down_move:.1f} in 2 candles then stalled. "
+                                         f"Bottom: ${bottom:.2f}. Potential bounce entry.",
+                                         price)
 
             except Exception as e:
                 print(f"[{time.strftime('%H:%M:%S')}] Error: {e}", flush=True)
