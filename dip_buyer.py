@@ -92,11 +92,68 @@ async def run():
                             pass
 
                         if has_long:
-                            msg = (f"V-Dip on 5m: dropped ${abs(dip_body):.1f}, bounced ${bounce_size:.1f} "
-                                   f"({retracement:.0f}% retracement). "
-                                   f"You're already LONG {pos_size} ETH. "
-                                   f"Low: ${dip_low:.2f}. Consider adding to position.")
-                            title = "V-Dip — Add to Long"
+                            # Check if we're under 25% of buying power
+                            can_add = False
+                            usage_pct = 100
+                            try:
+                                acct = pos_resp.json().get("account", {})
+                                equity = float(acct.get("equity", 0))
+                                available = float(acct.get("available", equity))
+                                # Usage = how much of our equity is committed (equity - available) / equity
+                                used = equity - available
+                                usage_pct = (used / equity * 100) if equity > 0 else 100
+                                can_add = usage_pct < 25
+                            except:
+                                pass
+
+                            if can_add:
+                                # Auto-add 1 ETH to existing long
+                                title = f"V-Dip — AUTO ADD 1 ETH (using {usage_pct:.0f}% of equity)"
+                                bought = False
+                                try:
+                                    buy_resp = await client.post(
+                                        f"{TRADING_SERVER}/api/training/instruct",
+                                        json={
+                                            "action": "buy",
+                                            "reasoning": f"Auto dip buyer pyramid: 5m dropped ${abs(dip_body):.1f}, "
+                                                         f"bounced ${bounce_size:.1f}. Adding 1 ETH to existing "
+                                                         f"{pos_size} ETH long. Portfolio usage: {usage_pct:.0f}%.",
+                                            "sizePct": 5,
+                                            "force": True,
+                                        },
+                                    )
+                                    buy_result = buy_resp.json()
+                                    if buy_result.get("status") == "executed":
+                                        bought = True
+                                        buy_price = buy_result.get("price", recovery_close)
+                                        print(f"  → AUTO ADD executed at ${buy_price:.2f} (portfolio: {usage_pct:.0f}%)", flush=True)
+
+                                        # Move SL down to new dip low minus buffer
+                                        sl_price = round(dip_low - 3, 1)
+                                        try:
+                                            sl_resp = await client.post(
+                                                f"{TRADING_SERVER}/api/risk/hl-stop",
+                                                json={"price": sl_price},
+                                            )
+                                            print(f"  → SL moved to ${sl_price:.1f}", flush=True)
+                                        except:
+                                            print(f"  → SL move failed", flush=True)
+                                    else:
+                                        print(f"  → Add failed: {buy_result}", flush=True)
+                                except Exception as e:
+                                    print(f"  → Auto add error: {e}", flush=True)
+
+                                msg = (f"V-Dip on 5m: dropped ${abs(dip_body):.1f}, bounced ${bounce_size:.1f}. "
+                                       f"{'ADDED 1 ETH' if bought else 'Add attempted but failed'}. "
+                                       f"Now {pos_size + (1 if bought else 0):.1f} ETH. "
+                                       f"Portfolio usage: {usage_pct:.0f}%.")
+                            else:
+                                # Over 25% — alert only
+                                msg = (f"V-Dip on 5m: dropped ${abs(dip_body):.1f}, bounced ${bounce_size:.1f}. "
+                                       f"Already LONG {pos_size} ETH (using {usage_pct:.0f}% of equity). "
+                                       f"Over 25% limit — NOT adding. Low: ${dip_low:.2f}.")
+                                title = f"V-Dip — At Limit ({usage_pct:.0f}%)"
+
                         else:
                             # NO POSITION — auto-buy 1 ETH and start ratchet
                             title = "V-Dip — AUTO BUY 1 ETH"
@@ -148,7 +205,7 @@ async def run():
                                 await client.post(
                                     f"https://ntfy.sh/{NTFY_TOPIC}",
                                     content=msg.encode(),
-                                    headers={"Title": f"📉 {title}", "Priority": "urgent",
+                                    headers={"Title": title, "Priority": "urgent",
                                              "Tags": "chart_with_downwards_trend"},
                                 )
                                 print(f"  → ntfy sent", flush=True)
