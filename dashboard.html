@@ -2141,6 +2141,32 @@
       if (!price) return;
 
       // Compute per-signal-type conviction from range asymmetry
+      // Weights from 80hr conviction tracker validation:
+      // options-skew: 55-56% directional (best) → 3x weight
+      // bb-reversal, mesa: 52% → 1.5x weight
+      // regime: 38% anti-useful → IGNORED
+      // oi: 42% → IGNORED
+      // cross-asset, momentum: <48% → 0.5x weight
+      // everything else: 1x
+      const SIGNAL_WEIGHTS = {
+        'options-skew': 3.0,
+        'bb-reversal': 1.5,
+        'mesa': 1.5,
+        'consensus': 1.0,
+        'funding': 1.0,
+        'trend-exhaustion': 1.0,
+        'basis': 0.8,
+        'vwap': 0.8,
+        'technical': 0.8,
+        'onchain-flow': 0.8,
+        'crypto-breadth': 0.7,
+        'momentum': 0.5,
+        'cross-asset': 0.5,
+        'liquidation': 0.5,
+        'regime': 0,    // IGNORED — 38% accuracy, anti-useful
+        'oi': 0,        // IGNORED — 42% accuracy
+      };
+
       const byType = {};
       preds.forEach(p => {
         if (p.expired) return;
@@ -2150,28 +2176,32 @@
         const conf = p.confidence || p.cc || 0;
         if (!target || conf < 0.01) return;
 
-        // Skew: how far target is from entry as %
+        const weight = SIGNAL_WEIGHTS[agent] ?? 1.0;
+        if (weight === 0) return; // Skip ignored signals
+
         const skew = (target - entry) / entry * 100;
 
-        if (!byType[agent]) byType[agent] = { totalSkew: 0, totalConf: 0, count: 0 };
+        if (!byType[agent]) byType[agent] = { totalSkew: 0, totalConf: 0, count: 0, weight };
         byType[agent].totalSkew += skew * conf;
         byType[agent].totalConf += conf;
         byType[agent].count++;
       });
 
-      // Overall weighted conviction
+      // Overall weighted conviction (signal weight × confidence × skew)
       let totalWeightedSkew = 0, totalWeight = 0;
       const badges = [];
       for (const [agent, d] of Object.entries(byType)) {
         const avgSkew = d.totalConf > 0 ? d.totalSkew / d.totalConf : 0;
         const avgConf = d.count > 0 ? d.totalConf / d.count : 0;
-        totalWeightedSkew += avgSkew * avgConf;
-        totalWeight += avgConf;
+        const w = d.weight;
+        totalWeightedSkew += avgSkew * avgConf * w;
+        totalWeight += avgConf * w;
 
         const bias = avgSkew > 0.01 ? 'LONG' : avgSkew < -0.01 ? 'SHORT' : 'FLAT';
         const color = bias === 'LONG' ? 'hsl(var(--py-success))' : bias === 'SHORT' ? 'hsl(var(--py-error))' : 'hsl(var(--py-fg-muted))';
         const bgColor = bias === 'LONG' ? 'hsl(var(--py-success) / 0.15)' : bias === 'SHORT' ? 'hsl(var(--py-error) / 0.15)' : 'hsl(var(--py-fg-muted) / 0.1)';
-        badges.push(`<span style="padding:2px 6px;border-radius:3px;background:${bgColor};color:${color};">${agent} <b>${bias}</b></span>`);
+        const wLabel = w >= 2 ? ' ★' : w <= 0.5 ? ' ·' : '';
+        badges.push(`<span style="padding:2px 6px;border-radius:3px;background:${bgColor};color:${color};">${agent}${wLabel} <b>${bias}</b></span>`);
       }
 
       const overall = totalWeight > 0 ? totalWeightedSkew / totalWeight : 0;

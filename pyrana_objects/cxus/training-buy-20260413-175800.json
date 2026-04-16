@@ -1,0 +1,45 @@
+{
+  "alias": "training-buy-20260413-175800",
+  "cxu_id": "1220fb43700e4a7326809229d43ed4c98623428668374028660771b7c88586946bf8",
+  "cxu_object": {
+    "claim": "Human trader executed buy at $2,223.85 in volatile regime. Reasoning: buying the bounce",
+    "supporting_contexts": [
+      {
+        "text": "Manual buy at 2026-04-13T17:58:00.870976+00:00. Price: $2,223.85, regime: volatile, BB: 13%, trend: -0.1481%, signal consensus: 54% LONG. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-13T17:58:00.871142+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

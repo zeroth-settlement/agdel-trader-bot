@@ -1,0 +1,45 @@
+{
+  "alias": "training-buy-20260413-195243",
+  "cxu_id": "1220818d54c1a90610230eb520b64c1cc87bcec5cc0a997ee484e91f9ebc4b17effd",
+  "cxu_object": {
+    "claim": "Human trader executed buy at $2,262.75 in trending_up regime. Reasoning: this is probably a mistake, but I think we are on a trend up.  lets catch it with a moderate position.",
+    "supporting_contexts": [
+      {
+        "text": "Manual buy at 2026-04-13T19:52:43.135831+00:00. Price: $2,262.75, regime: trending_up, BB: 82%, trend: 1.2185%, signal consensus: 51% SHORT. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-13T19:52:43.135956+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

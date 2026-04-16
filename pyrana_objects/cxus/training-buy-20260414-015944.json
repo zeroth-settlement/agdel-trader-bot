@@ -1,0 +1,45 @@
+{
+  "alias": "training-buy-20260414-015944",
+  "cxu_id": "1220285aa402571c7a1fa6d555482f91db19e1af1acce5e0d2ecc126caedae9b55d8",
+  "cxu_object": {
+    "claim": "Human trader executed buy at $2,367.85 in trending_up regime. Reasoning: buying a stronger dip on this upward trend...",
+    "supporting_contexts": [
+      {
+        "text": "Manual buy at 2026-04-14T01:59:44.690583+00:00. Price: $2,367.85, regime: trending_up, BB: 0%, trend: 0.2709%, signal consensus: 58% LONG. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-14T01:59:44.690740+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

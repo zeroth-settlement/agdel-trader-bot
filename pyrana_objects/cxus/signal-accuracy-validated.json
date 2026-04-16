@@ -1,0 +1,55 @@
+{
+  "alias": "signal-accuracy-validated",
+  "cxu_id": "1220225f74aa05977a42f463efee494e77b7b13824d02ba2c1784fbfc02f855cfe13",
+  "cxu_object": {
+    "claim": "After 80 hours of tracking signal conviction against price movements, options-skew is the only signal with consistent directional accuracy at 55-56 percent while regime signal is anti-useful at 38 percent and should be ignored or inverted and most other signals cluster around 48-52 percent which is noise",
+    "supporting_contexts": [
+      {
+        "text": "Conviction tracker analysis over 4,812 data points at 5-minute resolution. Per-signal accuracy: options-skew 56% bull / 55% bear (best directional), bb-reversal 52%, mesa 52% (high conf but one-directional), regime 38% (worst, high-conf only 29%), oi 42%, cross-asset 46%. Signals with >50% overall: bb-reversal, consensus, mesa, funding, trend-exhaustion. Signals below 50%: basis, onchain-flow, options-skew overall but strong directional, technical, momentum, cross-asset, oi, regime.",
+        "line": null
+      },
+      {
+        "text": "Key insight: stronger conviction does NOT improve accuracy for most signals. NEUTRAL predictions (no direction) are 63% accurate \u2014 the most reliable signal is when signals collectively say nothing will happen. For directional trades, weight options-skew heavily and ignore regime entirely.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "finding",
+      "keywords": [
+        "signal accuracy",
+        "options-skew",
+        "regime",
+        "conviction",
+        "validated"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-16T12:55:41.926868+00:00",
+    "created_by": "conviction-tracker-analysis",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by conviction-tracker-analysis",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

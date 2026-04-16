@@ -1,0 +1,45 @@
+{
+  "alias": "training-buy-20260415-130535",
+  "cxu_id": "1220ec0fc8fa83578247dbf39e103d4980f95074e99673ee11d0a79b05b0d0dea3b1",
+  "cxu_object": {
+    "claim": "Human trader executed buy at $2,327.15 in volatile regime. Reasoning: adding to my long position since I missed the bottom.",
+    "supporting_contexts": [
+      {
+        "text": "Manual buy at 2026-04-15T13:05:35.629344+00:00. Price: $2,327.15, regime: volatile, BB: 0%, trend: -0.1716%, signal consensus: 69% LONG. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-15T13:05:35.629462+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}
