@@ -98,11 +98,46 @@ async def run():
                                    f"Low: ${dip_low:.2f}. Consider adding to position.")
                             title = "V-Dip — Add to Long"
                         else:
+                            # NO POSITION — auto-buy 1 ETH and start ratchet
+                            title = "V-Dip — AUTO BUY 1 ETH"
+                            bought = False
+                            try:
+                                buy_resp = await client.post(
+                                    f"{TRADING_SERVER}/api/training/instruct",
+                                    json={
+                                        "action": "buy",
+                                        "reasoning": f"Auto dip buyer: 5m candle dropped ${abs(dip_body):.1f}, "
+                                                     f"bounced ${bounce_size:.1f} ({retracement:.0f}% retracement). "
+                                                     f"Low: ${dip_low:.2f}. Auto-entry 1 ETH.",
+                                        "sizePct": 5,  # Small — roughly 1 ETH
+                                        "force": True,
+                                    },
+                                )
+                                buy_result = buy_resp.json()
+                                if buy_result.get("status") == "executed":
+                                    bought = True
+                                    buy_price = buy_result.get("price", recovery_close)
+                                    print(f"  → AUTO BUY executed at ${buy_price:.2f}", flush=True)
+
+                                    # Place SL at dip low minus a small buffer
+                                    sl_price = round(dip_low - 3, 1)
+                                    try:
+                                        sl_resp = await client.post(
+                                            f"{TRADING_SERVER}/api/risk/hl-stop",
+                                            json={"price": sl_price},
+                                        )
+                                        print(f"  → SL placed at ${sl_price:.1f}", flush=True)
+                                    except:
+                                        print(f"  → SL placement failed", flush=True)
+                                else:
+                                    print(f"  → Buy failed: {buy_result}", flush=True)
+                            except Exception as e:
+                                print(f"  → Auto buy error: {e}", flush=True)
+
                             msg = (f"V-Dip on 5m: dropped ${abs(dip_body):.1f}, bounced ${bounce_size:.1f} "
                                    f"({retracement:.0f}% retracement). "
-                                   f"Low: ${dip_low:.2f}, now: ${recovery_close:.2f}. "
-                                   f"Bounce entry opportunity.")
-                            title = "V-Dip — Buy the Bounce"
+                                   f"{'BOUGHT 1 ETH' if bought else 'Buy attempted but failed'}. "
+                                   f"Low: ${dip_low:.2f}, now: ${recovery_close:.2f}.")
 
                         print(f"[{time.strftime('%H:%M:%S')}] {title}: dip=${dip_body:.1f} bounce=${bounce_size:.1f} "
                               f"low=${dip_low:.2f} now=${recovery_close:.2f}", flush=True)
