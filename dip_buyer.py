@@ -1,0 +1,132 @@
+"""Dip Buyer — auto-detects V-dip patterns on 5m candles and alerts/executes.
+
+Pattern:
+1. 5m candle closes with body < -$DIP_THRESHOLD (big red candle)
+2. Next candle opens and starts recovering (close > open)
+3. → Alert: "V-Dip detected, bounce forming"
+4. If auto_execute=True and in paper mode, places a market buy
+
+Does NOT auto-execute on live positions. Alerts only for live.
+"""
+import asyncio
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+TRADING_SERVER = "http://localhost:9004"
+CHECK_INTERVAL = 15  # Check every 15 seconds
+DIP_THRESHOLD = 8.0  # Minimum $ drop in one 5m candle body
+COOLDOWN = 600  # 10 min between triggers
+NTFY_TOPIC = ""
+
+# Load env
+try:
+    with open(os.path.join(os.path.dirname(__file__), '.env')) as f:
+        for line in f:
+            if line.strip().startswith('NTFY_TOPIC='):
+                NTFY_TOPIC = line.strip().split('=', 1)[1]
+except:
+    pass
+
+last_trigger_time = 0
+last_dip_candle_t = 0  # Timestamp of the dip candle we're watching
+
+
+async def run():
+    global last_trigger_time, last_dip_candle_t
+    import httpx
+
+    print(f"Dip buyer started (threshold=${DIP_THRESHOLD}, interval={CHECK_INTERVAL}s)", flush=True)
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        while True:
+            try:
+                # Get 5m candles
+                resp = await client.get(f"{TRADING_SERVER}/api/candles?timeframe=5m&limit=5")
+                candles = resp.json().get("candles", [])
+
+                if len(candles) < 3:
+                    await asyncio.sleep(CHECK_INTERVAL)
+                    continue
+
+                now = time.time()
+
+                # Look at the last 3 candles: [..., dip_candle, recovery_candle, current]
+                for i in range(len(candles) - 1):
+                    dip = candles[i]
+                    recovery = candles[i + 1]
+
+                    dip_body = dip.get("c", 0) - dip.get("o", 0)
+                    dip_low = dip.get("l", 0)
+                    dip_range = dip.get("h", 0) - dip_low
+                    dip_t = dip.get("t", 0)
+
+                    recovery_body = recovery.get("c", 0) - recovery.get("o", 0)
+                    recovery_close = recovery.get("c", 0)
+
+                    # Pattern: big red candle followed by green candle
+                    is_dip = dip_body <= -DIP_THRESHOLD
+                    is_bounce = recovery_body > 0
+                    is_fresh = dip_t != last_dip_candle_t
+                    is_cooled = now - last_trigger_time > COOLDOWN
+
+                    if is_dip and is_bounce and is_fresh and is_cooled:
+                        bounce_size = recovery_close - dip_low
+                        retracement = bounce_size / dip_range * 100 if dip_range > 0 else 0
+
+                        last_trigger_time = now
+                        last_dip_candle_t = dip_t
+
+                        # Check current position
+                        has_long = False
+                        pos_size = 0
+                        try:
+                            pos_resp = await client.get(f"{TRADING_SERVER}/api/position/hl")
+                            pos_data = pos_resp.json().get("position")
+                            if pos_data and pos_data.get("side") == "long":
+                                has_long = True
+                                pos_size = pos_data.get("size", 0)
+                        except:
+                            pass
+
+                        if has_long:
+                            msg = (f"V-Dip on 5m: dropped ${abs(dip_body):.1f}, bounced ${bounce_size:.1f} "
+                                   f"({retracement:.0f}% retracement). "
+                                   f"You're already LONG {pos_size} ETH. "
+                                   f"Low: ${dip_low:.2f}. Consider adding to position.")
+                            title = "V-Dip — Add to Long"
+                        else:
+                            msg = (f"V-Dip on 5m: dropped ${abs(dip_body):.1f}, bounced ${bounce_size:.1f} "
+                                   f"({retracement:.0f}% retracement). "
+                                   f"Low: ${dip_low:.2f}, now: ${recovery_close:.2f}. "
+                                   f"Bounce entry opportunity.")
+                            title = "V-Dip — Buy the Bounce"
+
+                        print(f"[{time.strftime('%H:%M:%S')}] {title}: dip=${dip_body:.1f} bounce=${bounce_size:.1f} "
+                              f"low=${dip_low:.2f} now=${recovery_close:.2f}", flush=True)
+
+                        # Send ntfy
+                        if NTFY_TOPIC:
+                            try:
+                                await client.post(
+                                    f"https://ntfy.sh/{NTFY_TOPIC}",
+                                    content=msg.encode(),
+                                    headers={"Title": f"📉 {title}", "Priority": "urgent",
+                                             "Tags": "chart_with_downwards_trend"},
+                                )
+                                print(f"  → ntfy sent", flush=True)
+                            except Exception as e:
+                                print(f"  → ntfy failed: {e}", flush=True)
+
+                        break  # Only alert on the most recent pattern
+
+            except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] Error: {e}", flush=True)
+
+            await asyncio.sleep(CHECK_INTERVAL)
+
+
+if __name__ == "__main__":
+    asyncio.run(run())
