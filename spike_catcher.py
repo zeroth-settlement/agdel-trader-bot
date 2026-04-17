@@ -76,9 +76,36 @@ async def run():
                           f"stall body=${stall_body:.2f} vs avg=${avg_spike_body:.2f} → SELL THE TOP @ ${price:.2f}",
                           flush=True)
                     last_alert_time = now
-                    await send_alert(client, "Spike UP — Sell the Top",
-                                     f"Price spiked +${spike_up_move:.1f} in 2 candles then stalled. "
-                                     f"Peak: ${peak:.2f}. Consider taking profit or tightening stop.",
+
+                    # Auto-sell 50% if we have a long position
+                    try:
+                        pos_resp = await client.get(f"{TRADING_SERVER}/api/position/hl")
+                        pos_data = pos_resp.json().get("position")
+                        if pos_data and pos_data.get("side") == "long":
+                            pos_size = float(pos_data.get("size", 0))
+                            sell_size = round(pos_size * 0.5, 4)
+                            print(f"  → Auto-selling 50% ({sell_size} ETH) at spike top", flush=True)
+                            sell_resp = await client.post(
+                                f"{TRADING_SERVER}/api/training/instruct",
+                                json={
+                                    "action": "sell",
+                                    "reasoning": f"Spike catcher: +${spike_up_move:.1f} spike stalled at ${price:.2f}. "
+                                                 f"Selling 50% ({sell_size} ETH) to lock in gains.",
+                                    "sizePct": 50,
+                                    "force": True,
+                                },
+                            )
+                            result = sell_resp.json()
+                            if result.get("status") == "executed":
+                                print(f"  → SOLD {sell_size} ETH at ${price:.2f}", flush=True)
+                            else:
+                                print(f"  → Sell failed: {result}", flush=True)
+                    except Exception as e:
+                        print(f"  → Auto-sell error: {e}", flush=True)
+
+                    await send_alert(client, "Spike UP - Sold 50%",
+                                     f"Price spiked +${spike_up_move:.1f} then stalled. "
+                                     f"Peak: ${peak:.2f}. Auto-sold 50% of position.",
                                      price)
 
                 # Check for SPIKE DOWN: c2+c3 dropped $10+
@@ -105,7 +132,7 @@ async def run():
                               f"stalled @ ${price:.2f} — {discount:.1f}% below entry. ADD opportunity.",
                               flush=True)
                         last_alert_time = now
-                        await send_alert(client, "Dip While Long — Add Opportunity",
+                        await send_alert(client, "Dip While Long - Add Opportunity",
                                          f"Price dipped -${spike_down_move:.1f} then stalled. "
                                          f"You're long {pos_size} ETH @ ${pos_entry:.2f}. "
                                          f"Current: ${price:.2f} ({discount:.1f}% below entry). "
@@ -117,7 +144,7 @@ async def run():
                               f"stall body=${stall_body:.2f} → BUY THE DIP @ ${price:.2f}",
                               flush=True)
                         last_alert_time = now
-                        await send_alert(client, "Spike DOWN — Buy the Dip",
+                        await send_alert(client, "Spike DOWN - Buy the Dip",
                                          f"Price dropped -${spike_down_move:.1f} in 2 candles then stalled. "
                                          f"Bottom: ${bottom:.2f}. Potential bounce entry.",
                                          price)
@@ -134,8 +161,8 @@ async def send_alert(client, title, message, price):
     try:
         await client.post(
             f"https://ntfy.sh/{NTFY_TOPIC}",
-            content=f"{message}\n\nPrice: ${price:,.2f}".encode(),
-            headers={"Title": f"⚡ {title}", "Priority": "urgent", "Tags": "chart_with_upwards_trend"},
+            content=f"{message}\n\nPrice: ${price:,.2f}".encode("utf-8"),
+            headers={"Title": title, "Priority": "urgent", "Tags": "chart_with_upwards_trend"},
         )
         print(f"  → ntfy sent", flush=True)
     except Exception as e:
