@@ -93,22 +93,16 @@ async def run():
 
                         if has_long:
                             # Check if we're under 25% of buying power
-                            can_add = False
-                            usage_pct = 100
-                            try:
-                                acct = pos_resp.json().get("account", {})
-                                equity = float(acct.get("equity", 0))
-                                available = float(acct.get("available", equity))
-                                # Usage = how much of our equity is committed (equity - available) / equity
-                                used = equity - available
-                                usage_pct = (used / equity * 100) if equity > 0 else 100
-                                can_add = usage_pct < 25
-                            except:
-                                pass
+                            # Hard cap: max 5 ETH total position from dip buys
+                            MAX_ETH = 5.0
+                            can_add = float(pos_size) < MAX_ETH
+                            usage_pct = float(pos_size) / MAX_ETH * 100
+                            print(f"  Position: {pos_size} ETH, cap: {MAX_ETH} ETH, "
+                                  f"can add: {'YES' if can_add else 'NO'}", flush=True)
 
                             if can_add:
                                 # Auto-add 1 ETH to existing long
-                                title = f"V-Dip — AUTO ADD 1 ETH (using {usage_pct:.0f}% of equity)"
+                                title = f"V-Dip -AUTO ADD 1 ETH (using {usage_pct:.0f}% of equity)"
                                 bought = False
                                 try:
                                     buy_resp = await client.post(
@@ -152,11 +146,11 @@ async def run():
                                 msg = (f"V-Dip on 5m: dropped ${abs(dip_body):.1f}, bounced ${bounce_size:.1f}. "
                                        f"Already LONG {pos_size} ETH (using {usage_pct:.0f}% of equity). "
                                        f"Over 25% limit — NOT adding. Low: ${dip_low:.2f}.")
-                                title = f"V-Dip — At Limit ({usage_pct:.0f}%)"
+                                title = f"V-Dip -At Limit ({usage_pct:.0f}%)"
 
                         else:
                             # NO POSITION — auto-buy 1 ETH and start ratchet
-                            title = "V-Dip — AUTO BUY 1 ETH"
+                            title = "V-Dip -AUTO BUY 1 ETH"
                             bought = False
                             try:
                                 buy_resp = await client.post(
@@ -204,8 +198,8 @@ async def run():
                             try:
                                 await client.post(
                                     f"https://ntfy.sh/{NTFY_TOPIC}",
-                                    content=msg.encode(),
-                                    headers={"Title": title, "Priority": "urgent",
+                                    content=msg.encode("utf-8"),
+                                    headers={"Title": title.encode("utf-8"), "Priority": "urgent",
                                              "Tags": "chart_with_downwards_trend"},
                                 )
                                 print(f"  → ntfy sent", flush=True)
