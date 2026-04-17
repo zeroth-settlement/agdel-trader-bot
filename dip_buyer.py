@@ -122,16 +122,8 @@ async def run():
                                         buy_price = buy_result.get("price", recovery_close)
                                         print(f"  → AUTO ADD executed at ${buy_price:.2f} (portfolio: {usage_pct:.0f}%)", flush=True)
 
-                                        # Move SL down to new dip low minus buffer
-                                        sl_price = round(dip_low - 3, 1)
-                                        try:
-                                            sl_resp = await client.post(
-                                                f"{TRADING_SERVER}/api/risk/hl-stop",
-                                                json={"price": sl_price},
-                                            )
-                                            print(f"  → SL moved to ${sl_price:.1f}", flush=True)
-                                        except:
-                                            print(f"  → SL move failed", flush=True)
+                                        # Don't touch the SL on adds — leave the wider safety SL in place
+                                        print(f"  → Keeping existing SL (not moving on pyramid add)", flush=True)
                                     else:
                                         print(f"  → Add failed: {buy_result}", flush=True)
                                 except Exception as e:
