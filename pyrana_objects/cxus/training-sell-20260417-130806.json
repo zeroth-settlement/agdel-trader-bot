@@ -1,0 +1,45 @@
+{
+  "alias": "training-sell-20260417-130806",
+  "cxu_id": "122077c00c6c098c8ebb0a7c588e3514636805c8998c9e1eb7e73409385ceb8e9cf3",
+  "cxu_object": {
+    "claim": "Human trader executed sell at $2,379.75 in trending_up regime. Reasoning: Spike catcher: +$10.2 spike stalled at $2378.75. Selling 50% (2.7578 ETH) to lock in gains.",
+    "supporting_contexts": [
+      {
+        "text": "Manual sell at 2026-04-17T13:08:06.957236+00:00. Price: $2,379.75, regime: trending_up, BB: 20%, trend: 0.4580%, signal consensus: 50% SHORT. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-17T13:08:06.957317+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

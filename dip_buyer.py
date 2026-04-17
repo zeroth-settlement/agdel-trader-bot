@@ -107,7 +107,7 @@ async def run():
                         if has_long:
                             # Check if we're under 25% of buying power
                             # Hard cap: max 5 ETH total position from dip buys
-                            MAX_ETH = 5.0
+                            MAX_ETH = 15.0
                             can_add = float(pos_size) < MAX_ETH
                             usage_pct = float(pos_size) / MAX_ETH * 100
                             print(f"  Position: {pos_size} ETH, cap: {MAX_ETH} ETH, "

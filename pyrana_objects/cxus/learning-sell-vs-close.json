@@ -1,0 +1,52 @@
+{
+  "alias": "learning-sell-vs-close",
+  "cxu_id": "122013ccf667952d7ae4b96c1298fbf55c349e0cb0fb7adf0ce79594be0271653364",
+  "cxu_object": {
+    "claim": "The training instruct endpoint interprets sell as open_short not reduce_long so the spike catcher must use action close to reduce a long position otherwise it flips the position to short and loses money on the continuing spike",
+    "supporting_contexts": [
+      {
+        "text": "On 2026-04-17 the spike catcher detected a spike up and sent action=sell sizePct=50 via training/instruct. This opened a SHORT position instead of reducing the existing LONG. The spike continued up and the new short lost $145+. The fix: use action=close for partial position reduction, not action=sell.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "axiom",
+      "claim_type": "requirement",
+      "keywords": [
+        "sell",
+        "close",
+        "reduce",
+        "short",
+        "spike catcher",
+        "critical"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:axiom",
+        "cxu_class:hypothesis",
+        "approval:human",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-17T13:11:29.922313+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:axiom",
+      "cxu_class:hypothesis",
+      "approval:human",
+      "agdel-trader-bot"
+    ]
+  }
+}

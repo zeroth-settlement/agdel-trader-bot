@@ -1,0 +1,45 @@
+{
+  "alias": "training-buy-20260416-212526",
+  "cxu_id": "122055b9349245570a618747fd0c4edad014ac7811103e0e6e034ac3eb1526bd4e4a",
+  "cxu_object": {
+    "claim": "Human trader executed buy at $2,339.45 in ranging regime. Reasoning: Auto dip buyer: 5m candle dropped $10.7, bounced $4.5 (31% retracement). Low: $2334.95. Auto-entry 1 ETH.",
+    "supporting_contexts": [
+      {
+        "text": "Manual buy at 2026-04-16T21:25:26.361209+00:00. Price: $2,339.45, regime: ranging, BB: 0%, trend: -0.0810%, signal consensus: 65% LONG. Conditions: none stated.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "derived",
+      "claim_type": "hypothesis",
+      "keywords": [],
+      "tags": [
+        "hl-trading",
+        "tier:learning",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-16T21:25:26.361329+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:learning",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

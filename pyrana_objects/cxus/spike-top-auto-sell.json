@@ -1,0 +1,79 @@
+{
+  "alias": "spike-top-auto-sell",
+  "cxu_id": "122051e5dd72515705c85a044f0458f40ea129d76c9bbd3493ab332b309c1e804001",
+  "cxu_object": {
+    "claim": "When price spikes up ten dollars or more in two consecutive one-minute candles and the next candle stalls with a body less than thirty percent of the average spike candle body then auto-sell fifty percent of the long position to lock in gains at the top because momentum spikes followed by stalls indicate the move is exhausting",
+    "supporting_contexts": [
+      {
+        "text": "Spike detection on 1m candles: two consecutive candles with combined upward move >= $10, followed by a candle where body < 30% of the average spike candle body (momentum stall). This pattern indicates the spike is exhausting and price is likely to pull back. Selling 50% captures the top while keeping 50% for continuation.",
+        "line": null
+      },
+      {
+        "text": "Learned from missed opportunity: on 2026-04-17 a +$13.80 spike up occurred at 05:29 but the ntfy notification failed (encoding bug) and no auto-sell was in place. Price pulled back and the gains were lost. Auto-selling 50% on spike detection prevents this.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "prescribed",
+      "claim_type": "procedure",
+      "keywords": [
+        "spike",
+        "top",
+        "auto-sell",
+        "momentum",
+        "stall",
+        "take profit"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:playbook",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    },
+    "parameters": {
+      "spikeThreshold": {
+        "value": 10.0,
+        "min": 5.0,
+        "max": 25.0,
+        "step": 1.0,
+        "description": "Minimum dollar move in 2 candles to count as spike"
+      },
+      "stallRatio": {
+        "value": 0.3,
+        "min": 0.1,
+        "max": 0.5,
+        "step": 0.05,
+        "description": "Max stall candle body as ratio of avg spike body"
+      },
+      "sellPct": {
+        "value": 50,
+        "min": 25,
+        "max": 100,
+        "step": 25,
+        "description": "Percentage of position to sell on spike top"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-17T13:07:46.014928+00:00",
+    "created_by": "human",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:playbook",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}

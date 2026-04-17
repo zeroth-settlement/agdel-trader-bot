@@ -1,0 +1,90 @@
+{
+  "alias": "v-dip-auto-buy",
+  "cxu_id": "122033e5ccc6becc3ff0ee0a057606a44eb48d118e7a88d94e073f834b2b076e4be9",
+  "cxu_object": {
+    "claim": "A V-dip entry is triggered when a 5-minute candle closes with a body drop of eight dollars or more followed by the next candle closing green indicating a bounce has started and the auto-buyer should market buy one ETH per dip and pyramid into subsequent dips up to a hard ETH cap without moving the safety stop loss on adds",
+    "supporting_contexts": [
+      {
+        "text": "Pattern validated over 10 days of live trading on ETH-USD. The V-dip appears as a single large red 5m candle (body < -$8) followed by a green recovery candle. Entry at the recovery close with SL at the dip low minus $3 buffer. The pattern bounces 70%+ of the time on 5m timeframe based on observed trades.",
+        "line": null
+      },
+      {
+        "text": "Pyramiding rules: add 1 ETH per V-dip up to a hard cap (currently 15 ETH). Do NOT move the safety SL when adding \u2014 the wide SL stays in place to give room for subsequent dips. No cooldown between adds \u2014 the ETH cap is the only limit. When flat and a V-dip occurs, auto-buy and place initial SL. When already long and under cap, auto-add without touching SL.",
+        "line": null
+      },
+      {
+        "text": "Critical lessons learned: (1) Restart of dip buyer can re-trigger on the same dip \u2014 persist last_dip_candle_t to disk. (2) Do not use portfolio percentage as pyramid cap with leveraged positions \u2014 use simple ETH cap instead. (3) The dip buyer should not place tight SLs that fight with the wider safety SL.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "prescribed",
+      "claim_type": "procedure",
+      "keywords": [
+        "v-dip",
+        "auto-buy",
+        "pyramid",
+        "bounce",
+        "5m candle",
+        "dip buyer"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:playbook",
+        "cxu_class:parameter",
+        "approval:agent",
+        "agdel-trader-bot"
+      ]
+    },
+    "parameters": {
+      "dipThreshold": {
+        "value": 8.0,
+        "min": 5.0,
+        "max": 20.0,
+        "step": 1.0,
+        "description": "Minimum 5m candle body drop in dollars to trigger"
+      },
+      "maxEthCap": {
+        "value": 15.0,
+        "min": 1.0,
+        "max": 50.0,
+        "step": 1.0,
+        "description": "Maximum total ETH position from dip buys"
+      },
+      "addSizeEth": {
+        "value": 1.0,
+        "min": 0.5,
+        "max": 5.0,
+        "step": 0.5,
+        "description": "ETH to add per dip trigger"
+      },
+      "slBufferUsd": {
+        "value": 3.0,
+        "min": 1.0,
+        "max": 10.0,
+        "step": 1.0,
+        "description": "SL placed this many dollars below the dip low on initial entry"
+      }
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-17T13:07:46.014060+00:00",
+    "created_by": "human",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:playbook",
+      "cxu_class:parameter",
+      "approval:agent",
+      "agdel-trader-bot"
+    ]
+  }
+}
