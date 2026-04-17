@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 TRADING_SERVER = "http://localhost:9004"
 CHECK_INTERVAL = 15  # Check every 15 seconds
 DIP_THRESHOLD = 8.0  # Minimum $ drop in one 5m candle body
-COOLDOWN = 600  # 10 min between triggers
+COOLDOWN = 0  # No cooldown — 5 ETH cap is the only limit
 NTFY_TOPIC = ""
 
 # Load env
@@ -32,6 +32,14 @@ except:
 
 last_trigger_time = 0
 last_dip_candle_t = 0  # Timestamp of the dip candle we're watching
+
+# Persist last dip timestamp across restarts
+DIP_STATE_FILE = os.path.join(os.path.dirname(__file__), "data", "dip_buyer_state.txt")
+try:
+    with open(DIP_STATE_FILE) as f:
+        last_dip_candle_t = float(f.read().strip())
+except:
+    pass
 
 
 async def run():
@@ -78,6 +86,11 @@ async def run():
 
                         last_trigger_time = now
                         last_dip_candle_t = dip_t
+                        try:
+                            with open(DIP_STATE_FILE, "w") as f:
+                                f.write(str(dip_t))
+                        except:
+                            pass
 
                         # Check current position
                         has_long = False
