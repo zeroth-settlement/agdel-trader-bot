@@ -1,0 +1,52 @@
+{
+  "alias": "learning-kill-all-monitors",
+  "cxu_id": "1220ed05fde68e64078cf2ee2664c2707a1802a31738553ab78cc024e918f5941a0b",
+  "cxu_object": {
+    "claim": "When switching to manual mode ALL monitors must be killed not just the one that caused the problem because the dip buyer spike catcher and ratchet can all interfere with manual position management and leaving any running risks unintended trades",
+    "supporting_contexts": [
+      {
+        "text": "On 2026-04-17 the spike catcher was killed after flipping a long to short, but the dip buyer was left running. The dip buyer then detected a V-dip and auto-bought, which closed the short position the user wanted to hold. Both losses were caused by monitors running when they should have been stopped.",
+        "line": null
+      }
+    ],
+    "metadata": {
+      "knowledge_type": "axiom",
+      "claim_type": "requirement",
+      "keywords": [
+        "monitors",
+        "kill",
+        "manual",
+        "dip buyer",
+        "spike catcher",
+        "ratchet"
+      ],
+      "tags": [
+        "hl-trading",
+        "tier:axiom",
+        "cxu_class:hypothesis",
+        "approval:human",
+        "agdel-trader-bot"
+      ]
+    }
+  },
+  "version": {
+    "number": "1.0",
+    "created_at": "2026-04-17T13:31:35.404557+00:00",
+    "created_by": "human-trainer",
+    "modified_at": null,
+    "modified_by": null,
+    "change_description": "Created by human-trainer",
+    "prior_cxu_id": null,
+    "source": null
+  },
+  "mutable_metadata": {
+    "status": "Active",
+    "tags": [
+      "hl-trading",
+      "tier:axiom",
+      "cxu_class:hypothesis",
+      "approval:human",
+      "agdel-trader-bot"
+    ]
+  }
+}
